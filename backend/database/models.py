@@ -121,3 +121,23 @@ class Lesson(Base):
     conditions = Column(JSON)                           # structured context (VIX level, bias, etc.)
     trade_id = Column(Integer)                          # related trade if applicable
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SignalFeature(Base):
+    """
+    Stores the full feature vector for every candle evaluated during backtill and live trading.
+    This becomes the labeled training dataset for the XGBoost model in Phase 4.
+    label: True = trade would have hit target, False = would have hit stop. Null until Phase 4.
+    """
+    __tablename__ = "signal_features"
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(20), nullable=False)
+    timestamp = Column(DateTime(timezone=True), nullable=False)
+    features = Column(JSON, nullable=False)             # full feature vector
+    label = Column(Boolean)                             # set in Phase 4 by dataset_builder
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_signal_features_symbol_timestamp", "symbol", "timestamp", unique=True),
+    )
