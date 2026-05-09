@@ -1,0 +1,3 @@
+-Go through idea.md file
+-Once understood the requirement First create a phase plan in a file which i can ask you to refer when it time to implement phase 2/3/4 etc.
+-let me know what you need from me consider i dont have anything as of now and ask do i have that if i say no guide step by step what to do in order to get that
