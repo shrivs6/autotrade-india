@@ -10,13 +10,17 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 0 — Prerequisites | 🔄 In Progress | Upstox account not started, Neon DB not created |
-| Phase 1 — Foundation | ⏳ Not Started | — |
-| Phase 2 — Feature Engineering | ⏳ Not Started | — |
-| Phase 3 — Rule-Based Paper Trading | ⏳ Not Started | — |
-| Phase 4 — ML Training + Backtesting | ⏳ Not Started | — |
-| Phase 5 — Live Paper Trading + Dashboard | ⏳ Not Started | — |
-| Phase 6 — Real Money + Claude Layer | ⏳ Not Started | — |
+| Phase 0 — Prerequisites | ✅ Done | Neon DB (Singapore), shrivs6 GitHub, Railway + Vercel accounts created. Upstox KYC pending. |
+| Phase 1 — Foundation | ✅ Done | FastAPI, scheduler, DB models, upstox_client (STUB_MODE=True), historical backfill run |
+| Phase 2 — Feature Engineering | ✅ Done | 27-feature vector, signal_features table backfilled (716k rows) |
+| Phase 3 — Rule-Based Paper Trading | ✅ Done | Paper broker, risk manager, order manager, post-market review, lessons |
+| Phase 4 — ML Training + Backtesting | ✅ Done | XGBoost trained (v1_initial), walk-forward validated, backtester built |
+| Phase 5 — Live Paper Trading + Dashboard | ✅ Done | ML signal evaluator, all API routes, React dashboard deployed. Backend: Railway. Frontend: Vercel. |
+| Phase 6 — Real Money + Claude Layer | ⏳ Blocked | Gate: 60%+ win rate for 30 consecutive days on real data. Waiting on Upstox KYC. |
+
+### Known Fixes Applied
+- `upstox-python-sdk` pinned to `2.26.0` (v2.8.0 no longer exists on PyPI)
+- Railway env vars must be set without quotes in the Variables tab
 
 ---
 
