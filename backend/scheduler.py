@@ -12,73 +12,150 @@ IST = pytz.timezone("Asia/Kolkata")
 
 
 def job_morning_data():
-    """8:30 AM — fetch overnight data, compute morning bias."""
+    """8:30 AM — fetch overnight data, compute and save morning bias."""
     logger.info("=== [8:30 AM] Fetching morning data ===")
     try:
         from backend.data.nse_client import fetch_vix, fetch_fii_data
-        vix = fetch_vix()
+        from backend.features.market_context_scorer import save_morning_context
+        from backend.trading.risk_manager import get_risk_manager
+        from backend.database.connection import SessionLocal
+        from backend.database.models import OHLCVDaily
+        from datetime import date, timedelta
+
+        vix = fetch_vix() or 15.0
         fii = fetch_fii_data()
-        logger.info(f"VIX: {vix} | FII: {fii}")
-        # TODO Phase 2: compute and store morning bias
+        fii_net = fii["fii_net_crores"] if fii else 0.0
+
+        # Get previous day Nifty return from daily candles
+        db = SessionLocal()
+        try:
+            rows = (
+                db.query(OHLCVDaily)
+                .filter(OHLCVDaily.symbol == "NIFTY 50")
+                .order_by(OHLCVDaily.date.desc())
+                .limit(2)
+                .all()
+            )
+            prev_return = 0.0
+            if len(rows) >= 2:
+                prev_return = (rows[0].close - rows[1].close) / rows[1].close
+        finally:
+            db.close()
+
+        save_morning_context(vix, fii_net, prev_return)
+
+        # Reset daily risk limits
+        get_risk_manager().reset_daily()
+
+        logger.info(f"Morning data done: VIX={vix}, FII=₹{fii_net:.0f}cr")
     except Exception as e:
         logger.error(f"Morning data job failed: {e}")
 
 
 def job_confirm_bias():
-    """9:15 AM — confirm morning bias with Nifty opening direction."""
+    """9:15 AM — log bias confirmation (Nifty open vs prev close)."""
     logger.info("=== [9:15 AM] Confirming market bias ===")
-    # TODO Phase 2: compare Nifty open vs previous close, finalize bias
+    try:
+        from backend.features.market_context_scorer import get_today_context
+        ctx = get_today_context()
+        if ctx:
+            bias = ctx.get("morning_bias", 0)
+            vix = ctx.get("vix", 0)
+            direction = "BULLISH" if bias > 0.1 else "BEARISH" if bias < -0.1 else "NEUTRAL"
+            logger.info(f"Bias confirmed: {direction} (score={bias:.2f}, VIX={vix:.1f})")
+    except Exception as e:
+        logger.error(f"Bias confirmation failed: {e}")
 
 
 def job_scan_and_trade():
-    """9:30 AM–3:20 PM every 5 min — scan stocks and place trades."""
+    """9:30 AM–3:20 PM every 5 min — scan all stocks and place trades."""
     from datetime import datetime
-    now = datetime.now(IST).strftime("%H:%M")
-    logger.info(f"=== [{now}] Scanning for trade signals ===")
-    # TODO Phase 3: feature build → signal evaluate → order manager
+    now = datetime.now(IST)
+
+    # Only trade during market hours
+    if now.hour < 9 or (now.hour == 9 and now.minute < 30):
+        return
+    if now.hour > 15 or (now.hour == 15 and now.minute >= 20):
+        return
+
+    logger.info(f"=== [{now.strftime('%H:%M')}] Scanning {50} stocks ===")
+
+    try:
+        from backend.features.feature_builder import build_features
+        from backend.trading.signal_evaluator import evaluate_and_log
+        from backend.trading.order_manager import open_trade, monitor_positions
+        from backend.data.upstox_client import get_upstox_client
+        from backend.utils.constants import NIFTY50_SYMBOLS
+
+        client = get_upstox_client()
+        current_prices = {}
+        signals_found = 0
+
+        for symbol in NIFTY50_SYMBOLS:
+            try:
+                features = build_features(symbol)
+                if features is None:
+                    continue
+
+                current_prices[symbol] = features.get("close_price", 0)
+
+                direction, signal_id = evaluate_and_log(features)
+
+                if direction:
+                    signals_found += 1
+                    open_trade(features, direction, signal_id)
+
+            except Exception as e:
+                logger.error(f"Error processing {symbol}: {e}")
+
+        # Check stop loss / target for open positions
+        monitor_positions(current_prices)
+
+        logger.info(f"Scan complete: {signals_found} signal(s) found")
+
+    except Exception as e:
+        logger.error(f"Scan and trade job failed: {e}")
 
 
 def job_square_off():
     """3:20 PM — force close all open positions."""
     logger.info("=== [3:20 PM] Squaring off all open positions ===")
-    # TODO Phase 3: close all open trades in position tracker
+    try:
+        from backend.trading.order_manager import square_off_all
+        square_off_all()
+    except Exception as e:
+        logger.error(f"Square off failed: {e}")
 
 
 def job_post_market():
     """3:45 PM — post-market review and lesson extraction."""
     logger.info("=== [3:45 PM] Running post-market review ===")
-    # TODO Phase 3: post_market_review + lesson_extractor
+    try:
+        from backend.review.post_market_review import run_review
+        from backend.review.lesson_extractor import extract_lessons
+        summary = run_review()
+        extract_lessons(summary)
+    except Exception as e:
+        logger.error(f"Post-market review failed: {e}")
 
 
 def job_nightly_retrain():
-    """11:00 PM — nightly model retrain."""
-    logger.info("=== [11:00 PM] Starting nightly model retrain ===")
-    # TODO Phase 4: incremental_trainer
+    """11:00 PM — nightly model retrain (active from Phase 4)."""
+    logger.info("=== [11:00 PM] Nightly model retrain — not yet active (Phase 4) ===")
 
 
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=IST)
 
-    # Morning data fetch
     scheduler.add_job(job_morning_data, CronTrigger(hour=8, minute=30, timezone=IST), id="morning_data")
-
-    # Bias confirmation
     scheduler.add_job(job_confirm_bias, CronTrigger(hour=9, minute=15, timezone=IST), id="confirm_bias")
-
-    # Trading loop: every 5 min from 9:30 to 15:20, Mon-Fri
     scheduler.add_job(
         job_scan_and_trade,
         CronTrigger(hour="9-15", minute="*/5", day_of_week="mon-fri", timezone=IST),
         id="scan_and_trade"
     )
-
-    # Square off
     scheduler.add_job(job_square_off, CronTrigger(hour=15, minute=20, timezone=IST), id="square_off")
-
-    # Post-market review
     scheduler.add_job(job_post_market, CronTrigger(hour=15, minute=45, timezone=IST), id="post_market")
-
-    # Nightly retrain
     scheduler.add_job(job_nightly_retrain, CronTrigger(hour=23, minute=0, timezone=IST), id="nightly_retrain")
 
     return scheduler
