@@ -140,8 +140,13 @@ def job_post_market():
 
 
 def job_nightly_retrain():
-    """11:00 PM — nightly model retrain (active from Phase 4)."""
-    logger.info("=== [11:00 PM] Nightly model retrain — not yet active (Phase 4) ===")
+    """11:00 PM — nightly model retrain."""
+    logger.info("=== [11:00 PM] Starting nightly model retrain ===")
+    try:
+        from backend.ml.incremental_trainer import run_incremental_retrain
+        run_incremental_retrain()
+    except Exception as e:
+        logger.error(f"Nightly retrain failed: {e}")
 
 
 def create_scheduler() -> BackgroundScheduler:
