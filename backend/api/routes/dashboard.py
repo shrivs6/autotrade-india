@@ -107,6 +107,8 @@ def get_todays_trades():
                 "exit_time": t.exit_time.astimezone(IST).strftime("%H:%M") if t.exit_time else None,
                 "entry_price": t.entry_price,
                 "exit_price": t.exit_price,
+                "quantity": t.quantity,
+                "exposure": round((t.entry_price or 0) * (t.quantity or 0), 2),
                 "pnl": round(t.pnl or 0, 2),
                 "result": "WIN" if win else "LOSS",
                 "exit_reason": t.exit_reason,

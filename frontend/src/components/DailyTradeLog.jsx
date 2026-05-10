@@ -19,8 +19,10 @@ export default function DailyTradeLog({ trades }) {
               <th>Direction</th>
               <th>Entry</th>
               <th>Exit</th>
+              <th>Qty</th>
               <th>Entry ₹</th>
               <th>Exit ₹</th>
+              <th>Exposure</th>
               <th>Duration</th>
               <th>Result</th>
               <th>PnL</th>
@@ -39,8 +41,10 @@ export default function DailyTradeLog({ trades }) {
                   </td>
                   <td>{t.entry_time}</td>
                   <td>{t.exit_time}</td>
+                  <td>{t.quantity ?? "—"}</td>
                   <td>₹{t.entry_price?.toFixed(2)}</td>
                   <td>₹{t.exit_price?.toFixed(2)}</td>
+                  <td>₹{t.exposure?.toLocaleString("en-IN")}</td>
                   <td>{t.duration_min}m</td>
                   <td>
                     <span className={`badge result ${isWin ? "win" : "loss"}`}>
