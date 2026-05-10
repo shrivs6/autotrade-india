@@ -4,9 +4,12 @@ import PerformanceStats from "./components/PerformanceStats";
 import WinRateChart from "./components/WinRateChart";
 import DailyTradeLog from "./components/DailyTradeLog";
 import LearningSummary from "./components/LearningSummary";
+import TabBar from "./components/TabBar";
+import HistoryTab from "./components/HistoryTab";
 import "./App.css";
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState("today");
   const [summary, setSummary] = useState(null);
   const [stats, setStats] = useState(null);
   const [winRateHistory, setWinRateHistory] = useState([]);
@@ -39,7 +42,7 @@ export default function App() {
 
   useEffect(() => {
     loadAll();
-    const interval = setInterval(loadAll, 60_000); // refresh every minute
+    const interval = setInterval(loadAll, 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -52,18 +55,24 @@ export default function App() {
 
       {error && <div className="error-banner">API error: {error}</div>}
 
-      {loading ? (
-        <div className="loading">Loading...</div>
-      ) : (
-        <>
-          <PerformanceStats summary={summary} stats={stats} />
-          <WinRateChart data={winRateHistory} />
-          <div className="bottom-grid">
-            <DailyTradeLog trades={trades} />
-            <LearningSummary lessons={lessons} />
-          </div>
-        </>
+      <TabBar active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === "today" && (
+        loading ? (
+          <div className="loading">Loading...</div>
+        ) : (
+          <>
+            <PerformanceStats summary={summary} stats={stats} />
+            <WinRateChart data={winRateHistory} />
+            <div className="bottom-grid">
+              <DailyTradeLog trades={trades} />
+              <LearningSummary lessons={lessons} />
+            </div>
+          </>
+        )
       )}
+
+      {activeTab === "history" && <HistoryTab />}
     </div>
   );
 }

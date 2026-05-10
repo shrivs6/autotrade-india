@@ -6,6 +6,7 @@ from backend.api.routes.health import router as health_router
 from backend.api.routes.dashboard import router as dashboard_router
 from backend.api.routes.trades import router as trades_router
 from backend.api.routes.performance import router as performance_router
+from backend.api.routes.history import router as history_router
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -38,3 +39,4 @@ app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(trades_router)
 app.include_router(performance_router)
+app.include_router(history_router)
