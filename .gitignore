@@ -9,3 +9,5 @@ node_modules/
 frontend/build/
 backend/ml/models/
 *.log
+node_modules/
+frontend/dist/

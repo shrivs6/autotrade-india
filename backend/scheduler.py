@@ -99,7 +99,9 @@ def job_scan_and_trade():
 
                 current_prices[symbol] = features.get("close_price", 0)
 
-                direction, signal_id = evaluate_and_log(features)
+                # Phase 5: use ML evaluator instead of rule engine
+                from backend.trading.ml_signal_evaluator import evaluate_ml
+                direction, signal_id = evaluate_ml(features)
 
                 if direction:
                     signals_found += 1
