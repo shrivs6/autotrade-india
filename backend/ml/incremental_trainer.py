@@ -6,42 +6,41 @@ Target: complete in < 10 minutes.
 """
 from datetime import date, datetime
 from backend.ml.dataset_builder import build_dataset
-from backend.ml.model_trainer import train_model, walk_forward_validate
-from backend.ml.model_registry import save_model, promote_if_better, get_production_version
+from backend.ml.model_trainer import train_model
+from backend.ml.model_registry import save_model, promote_if_better
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Only use last 3 months of data for nightly retrain to keep memory usage low
+RETRAIN_MONTHS_BACK = 3
 
 
 def run_incremental_retrain():
     """
     Called nightly by the scheduler.
-    Rebuilds dataset (includes today's new trade outcomes), retrains, promotes if better.
+    Rebuilds dataset (last 3 months), retrains, promotes if better.
+    Skips walk-forward validation to save memory — uses simple 90/10 eval split instead.
     """
     logger.info("=== Nightly Retrain Starting ===")
     start = datetime.now()
 
     try:
-        # Build full dataset (includes all historical + today's new labeled data)
-        logger.info("Building dataset...")
-        df = build_dataset()
+        # Build dataset limited to last 3 months to avoid OOM
+        logger.info(f"Building dataset (last {RETRAIN_MONTHS_BACK} months)...")
+        df = build_dataset(months_back=RETRAIN_MONTHS_BACK)
 
         if len(df) < 500:
             logger.warning(f"Dataset too small ({len(df)} rows) — skipping retrain")
             return
 
-        # Quick walk-forward validation (2 folds to keep it fast)
-        logger.info("Running walk-forward validation...")
-        wf_results = walk_forward_validate(df, n_splits=2)
-        new_auc = wf_results["avg_auc"]
-
-        # Train on full dataset
-        logger.info("Training on full dataset...")
-        model = train_model(df)
+        # Train on dataset — returns (model, eval_auc)
+        logger.info("Training model...")
+        model, new_auc = train_model(df)
 
         # Version by date
         version = date.today().strftime("v%Y%m%d")
-        save_model(model, version, auc=new_auc, metadata={"rows": len(df), "folds": wf_results})
+        save_model(model, version, auc=new_auc, metadata={"rows": len(df), "months_back": RETRAIN_MONTHS_BACK})
 
         # Promote only if AUC improves
         promoted = promote_if_better(version)

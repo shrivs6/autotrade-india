@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 def get_xgb_params(neg_count: int, pos_count: int) -> dict:
     """XGBoost hyperparameters. scale_pos_weight handles class imbalance."""
     return {
-        "n_estimators": 500,
+        "n_estimators": 300,
         "max_depth": 6,
         "learning_rate": 0.05,
         "subsample": 0.8,
@@ -26,15 +26,15 @@ def get_xgb_params(neg_count: int, pos_count: int) -> dict:
         "eval_metric": "auc",
         "early_stopping_rounds": 50,  # passed in constructor for newer XGBoost
         "random_state": 42,
-        "n_jobs": -1,
+        "n_jobs": 2,
     }
 
 
-def train_model(df: pd.DataFrame) -> XGBClassifier:
+def train_model(df: pd.DataFrame) -> tuple:
     """
     Trains XGBoost on the full dataset.
     Used for the initial v1 model and nightly retraining.
-    Returns the fitted model.
+    Returns (model, eval_auc).
     """
     feature_cols = [c for c in FEATURE_COLS if c in df.columns]
     X = df[feature_cols].values
@@ -58,11 +58,10 @@ def train_model(df: pd.DataFrame) -> XGBClassifier:
         verbose=False,
     )
 
-    train_auc = roc_auc_score(y_train, model.predict_proba(X_train)[:, 1])
     eval_auc = roc_auc_score(y_eval, model.predict_proba(X_eval)[:, 1])
-    logger.info(f"Train AUC: {train_auc:.4f} | Eval AUC: {eval_auc:.4f}")
+    logger.info(f"Eval AUC: {eval_auc:.4f}")
 
-    return model
+    return model, eval_auc
 
 
 def walk_forward_validate(df: pd.DataFrame, n_splits: int = 4) -> dict:

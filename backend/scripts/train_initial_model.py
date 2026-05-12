@@ -20,7 +20,7 @@ wf = walk_forward_validate(df, n_splits=4)
 print(f"  Avg AUC: {wf['avg_auc']:.4f}")
 
 print("\nStep 3/4: Training on full dataset...")
-model = train_model(df)
+model, eval_auc = train_model(df)
 
 print("\nStep 4/4: Evaluating thresholds...")
 threshold_results = evaluate_thresholds(model, df)

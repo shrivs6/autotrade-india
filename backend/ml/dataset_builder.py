@@ -67,19 +67,26 @@ def compute_label(
     return 0  # timeout = loss
 
 
-def build_dataset(symbols: list = None, limit_per_symbol: int = None) -> pd.DataFrame:
+def build_dataset(symbols: list = None, limit_per_symbol: int = None, months_back: int = None) -> pd.DataFrame:
     """
     Main function. Returns labeled DataFrame ready for XGBoost training.
 
     Args:
         symbols: list of symbols to include (default: all Nifty 50)
         limit_per_symbol: cap rows per symbol (useful for quick testing)
+        months_back: only use feature rows from last N months (None = all-time)
 
     Returns:
         DataFrame with FEATURE_COLS + 'label' column
     """
     if symbols is None:
         symbols = NIFTY50_SYMBOLS
+
+    cutoff = None
+    if months_back:
+        from datetime import datetime
+        from dateutil.relativedelta import relativedelta
+        cutoff = datetime.utcnow() - relativedelta(months=months_back)
 
     db = SessionLocal()
     all_rows = []
@@ -88,13 +95,14 @@ def build_dataset(symbols: list = None, limit_per_symbol: int = None) -> pd.Data
         for i, symbol in enumerate(symbols, 1):
             logger.info(f"[{i}/{len(symbols)}] Building dataset for {symbol}...")
 
-            # Fetch all feature rows for this symbol
-            feature_rows = (
+            # Fetch feature rows for this symbol (optionally time-limited)
+            q = (
                 db.query(SignalFeature)
                 .filter(SignalFeature.symbol == symbol)
-                .order_by(SignalFeature.timestamp.asc())
-                .all()
             )
+            if cutoff:
+                q = q.filter(SignalFeature.timestamp >= cutoff)
+            feature_rows = q.order_by(SignalFeature.timestamp.asc()).all()
 
             if not feature_rows:
                 logger.warning(f"{symbol}: no feature rows found")
