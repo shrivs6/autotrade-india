@@ -15,6 +15,28 @@ logger = get_logger(__name__)
 STUB_MODE = os.getenv("STUB_MODE", "True").strip().lower() not in ("false", "0", "no")
 
 
+def _build_instrument_map() -> dict:
+    """Download Upstox instruments CSV and return {trading_symbol: instrument_key}."""
+    try:
+        import gzip, io, csv
+        import requests as req
+        url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.csv.gz"
+        r = req.get(url, timeout=30)
+        r.raise_for_status()
+        with gzip.open(io.BytesIO(r.content), "rt") as f:
+            reader = csv.DictReader(f)
+            mapping = {
+                row["tradingsymbol"]: row["instrument_key"]
+                for row in reader
+                if row.get("instrument_type") == "EQUITY"
+            }
+        logger.info(f"Loaded {len(mapping)} instrument keys from Upstox")
+        return mapping
+    except Exception as e:
+        logger.error(f"Failed to load instrument map: {e}")
+        return {}
+
+
 def _load_token_from_db() -> str | None:
     """Load the latest valid token from DB."""
     try:
@@ -37,8 +59,10 @@ def _load_token_from_db() -> str | None:
 class UpstoxClient:
     def __init__(self):
         self.access_token = None
+        self._instrument_map = {}
         if not STUB_MODE:
             self._load_token()
+            self._instrument_map = _build_instrument_map()
 
     def _load_token(self):
         token = _load_token_from_db()
@@ -54,6 +78,7 @@ class UpstoxClient:
     def reload_token(self, access_token: str):
         """Called after /callback saves a new token."""
         self.access_token = access_token
+        self._instrument_map = _build_instrument_map()
         logger.info("Upstox token reloaded in client.")
 
     def fetch_historical(
@@ -73,15 +98,19 @@ class UpstoxClient:
             import upstox_client
             config = upstox_client.Configuration()
             config.access_token = self.access_token
-            with upstox_client.ApiClient(config) as client:
-                api = upstox_client.HistoryApi(client)
-                response = api.get_historical_candle_data1(
-                    instrument_key=f"NSE_EQ|{symbol}",
-                    interval=interval,
-                    to_date=to_date,
-                    from_date=from_date,
-                    api_version="2.0",
-                )
+            client = upstox_client.ApiClient(config)
+            api = upstox_client.HistoryApi(client)
+
+            instrument_key = self._instrument_map.get(symbol, f"NSE_EQ|{symbol}")
+            # Upstox v2 dropped "5minute" — fetch 1min and resample
+            api_interval = "1minute" if interval == "5minute" else interval
+            response = api.get_historical_candle_data1(
+                instrument_key=instrument_key,
+                interval=api_interval,
+                to_date=to_date,
+                from_date=from_date,
+                api_version="2.0",
+            )
             candles = response.data.candles
             df = pd.DataFrame(
                 candles,
@@ -89,6 +118,16 @@ class UpstoxClient:
             )
             df["timestamp"] = pd.to_datetime(df["timestamp"])
             df = df[["timestamp", "open", "high", "low", "close", "volume"]].sort_values("timestamp")
+
+            if interval == "5minute":
+                df = df.set_index("timestamp").resample("5min").agg({
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum",
+                }).dropna().reset_index()
+
             logger.info(f"Fetched {len(df)} candles for {symbol} ({interval})")
             return df
         except Exception as e:
@@ -106,13 +145,14 @@ class UpstoxClient:
             import upstox_client
             config = upstox_client.Configuration()
             config.access_token = self.access_token
-            with upstox_client.ApiClient(config) as client:
-                api = upstox_client.MarketQuoteApi(client)
-                response = api.ltp(
-                    symbol=f"NSE_EQ|{symbol}",
-                    api_version="2.0",
-                )
-            return response.data[f"NSE_EQ:{symbol}"].last_price
+            client = upstox_client.ApiClient(config)
+            api = upstox_client.MarketQuoteApi(client)
+            instrument_key = self._instrument_map.get(symbol, f"NSE_EQ|{symbol}")
+            response = api.ltp(
+                symbol=instrument_key,
+                api_version="2.0",
+            )
+            return response.data[instrument_key].last_price
         except Exception as e:
             logger.error(f"Failed to fetch LTP for {symbol}: {e}")
             raise

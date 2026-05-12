@@ -25,9 +25,9 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Upstox allows max 1 year per request for 5-min data
-# We fetch in 3-month chunks to stay within limits
-CHUNK_MONTHS = 3
+# Upstox 1-minute data: max 30 days per request
+# We fetch in 30-day chunks (12 months = ~12 requests per symbol)
+CHUNK_DAYS = 30
 RATE_LIMIT_SLEEP = 0.6   # seconds between requests (~1.6 req/sec, safely under the 2/sec limit)
 
 
@@ -110,11 +110,11 @@ def fetch_5min_for_symbol(client, db, symbol: str, months_back: int = 12):
     end = datetime.today()
     start = end - relativedelta(months=months_back)
 
-    # Build list of (chunk_start, chunk_end) date ranges
+    # Build list of (chunk_start, chunk_end) date ranges — 30-day chunks for 1-min data
     chunks = []
     chunk_start = start
     while chunk_start < end:
-        chunk_end = min(chunk_start + relativedelta(months=CHUNK_MONTHS), end)
+        chunk_end = min(chunk_start + timedelta(days=CHUNK_DAYS), end)
         chunks.append((chunk_start, chunk_end))
         chunk_start = chunk_end
 
