@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from datetime import date, timedelta
 from collections import defaultdict
 import pytz
@@ -50,3 +50,11 @@ def get_daily_summary(days: int = 30):
         return rows
     finally:
         db.close()
+
+
+@router.post("/admin/retrain")
+def trigger_retrain(background_tasks: BackgroundTasks):
+    """Manually trigger nightly retrain. Runs in background — check Railway logs for progress."""
+    from backend.ml.incremental_trainer import run_incremental_retrain
+    background_tasks.add_task(run_incremental_retrain)
+    return {"status": "retrain started — check Railway logs"}
