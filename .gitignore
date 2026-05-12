@@ -7,7 +7,7 @@ __pycache__/
 .DS_Store
 node_modules/
 frontend/build/
-backend/ml/models/
+# backend/ml/models/ — keep models in git so Railway can load them
 *.log
 node_modules/
 frontend/dist/

@@ -88,6 +88,10 @@ def load_production_model() -> XGBClassifier | None:
         return None
 
     path = prod["path"]
+    # Fall back to MODELS_DIR-relative filename if absolute path doesn't exist (e.g. on Railway)
+    if not os.path.exists(path):
+        filename = os.path.basename(path)
+        path = os.path.join(MODELS_DIR, filename)
     if not os.path.exists(path):
         logger.error(f"Production model file not found: {path}")
         return None
