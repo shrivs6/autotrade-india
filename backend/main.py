@@ -46,3 +46,7 @@ app.include_router(trades_router)
 app.include_router(performance_router)
 app.include_router(history_router)
 app.include_router(auth_router)
+
+# Root-level /callback so Upstox redirect URI matches
+from backend.api.routes.auth import callback as _auth_callback
+app.add_api_route("/callback", _auth_callback, methods=["GET"])
