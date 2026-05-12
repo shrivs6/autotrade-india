@@ -141,3 +141,13 @@ class SignalFeature(Base):
     __table_args__ = (
         Index("ix_signal_features_symbol_timestamp", "symbol", "timestamp", unique=True),
     )
+
+
+class UpstoxToken(Base):
+    """Stores the daily Upstox OAuth token. Railway filesystem is ephemeral so we use DB."""
+    __tablename__ = "upstox_token"
+
+    id = Column(Integer, primary_key=True)
+    access_token = Column(Text, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
