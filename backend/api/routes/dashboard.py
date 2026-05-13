@@ -3,7 +3,6 @@ from datetime import date, datetime, timedelta
 import pytz
 from backend.database.connection import SessionLocal
 from backend.database.models import Trade, ModelPerformance, Lesson, MarketContext, TradeSignal
-from backend.trading.position_tracker import get_position_tracker
 from backend.trading.risk_manager import get_risk_manager
 from backend.ml.model_registry import get_production_version, get_production_auc
 
@@ -61,7 +60,7 @@ def get_summary():
             "today_win_rate": today_wr,
             "all_time_win_rate": all_time_wr,
             "all_time_trades": total,
-            "open_positions": get_position_tracker().count(),
+            "open_positions": db.query(Trade).filter(Trade.status == "open").count(),
             "daily_pnl_limit_hit": get_risk_manager().trading_halted,
             "model_version": get_production_version() or "none",
             "model_auc": get_production_auc(),
