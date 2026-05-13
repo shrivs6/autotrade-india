@@ -134,6 +134,52 @@ class UpstoxClient:
             logger.error(f"Failed to fetch historical data for {symbol}: {e}")
             raise
 
+    def fetch_intraday(self, symbol: str, interval: str = "5minute") -> pd.DataFrame:
+        """Fetch today's intraday candles using Upstox intraday endpoint."""
+        if STUB_MODE:
+            return self._stub_historical(symbol, interval,
+                                         datetime.today().strftime("%Y-%m-%d"),
+                                         datetime.today().strftime("%Y-%m-%d"))
+        if not self.access_token:
+            raise RuntimeError("No Upstox token. Visit /auth/login to authenticate.")
+        try:
+            import upstox_client
+            config = upstox_client.Configuration()
+            config.access_token = self.access_token
+            client = upstox_client.ApiClient(config)
+            api = upstox_client.HistoryApi(client)
+
+            instrument_key = self._instrument_map.get(symbol, f"NSE_EQ|{symbol}")
+            api_interval = "1minute" if interval == "5minute" else interval
+            response = api.get_intra_day_candle_data(
+                instrument_key=instrument_key,
+                interval=api_interval,
+                api_version="2.0",
+            )
+            candles = response.data.candles
+            if not candles:
+                logger.info(f"Fetched 0 intraday candles for {symbol}")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(
+                candles,
+                columns=["timestamp", "open", "high", "low", "close", "volume", "oi"],
+            )
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = df[["timestamp", "open", "high", "low", "close", "volume"]].sort_values("timestamp")
+
+            if interval == "5minute":
+                df = df.set_index("timestamp").resample("5min").agg({
+                    "open": "first", "high": "max",
+                    "low": "min", "close": "last", "volume": "sum",
+                }).dropna().reset_index()
+
+            logger.info(f"Fetched {len(df)} intraday candles for {symbol}")
+            return df
+        except Exception as e:
+            logger.error(f"Failed to fetch intraday data for {symbol}: {e}")
+            raise
+
     def fetch_ltp(self, symbol: str) -> float:
         if STUB_MODE:
             return round(np.random.uniform(500, 3000), 2)

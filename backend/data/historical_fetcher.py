@@ -159,14 +159,13 @@ def refresh_todays_candles():
     """
     client = get_upstox_client()
     db = SessionLocal()
-    today_str = datetime.today().strftime("%Y-%m-%d")
     total = 0
     failed = []
 
     try:
         for symbol in NIFTY50_SYMBOLS:
             try:
-                df = client.fetch_historical(symbol, "5minute", today_str, today_str)
+                df = client.fetch_intraday(symbol, "5minute")
                 inserted = upsert_5min(db, df, symbol)
                 total += inserted
                 time.sleep(RATE_LIMIT_SLEEP)
