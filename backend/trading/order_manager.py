@@ -34,8 +34,15 @@ def open_trade(features: dict, direction: str, signal_id: int | None = None) -> 
     risk = get_risk_manager()
     tracker = get_position_tracker()
 
-    # Risk gate
-    approved, reason = risk.approve(symbol, direction, tracker.get_all())
+    # Risk gate — read open positions from DB so duplicate check survives server restarts
+    db_check = SessionLocal()
+    try:
+        db_open = db_check.query(Trade).filter(Trade.status == "open").all()
+        db_positions = [{"symbol": t.symbol} for t in db_open]
+    finally:
+        db_check.close()
+
+    approved, reason = risk.approve(symbol, direction, db_positions)
     if not approved:
         logger.info(f"{symbol}: trade rejected — {reason}")
         return False
