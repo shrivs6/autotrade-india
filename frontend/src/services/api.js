@@ -12,6 +12,7 @@ export const api = {
   todaysTrades: () => get("/api/dashboard/todays-trades"),
   lessons: () => get("/api/dashboard/lessons"),
   stats: () => get("/api/performance/stats"),
+  openPositions: () => get("/api/trades/open"),
   dailySummary: (days = 30) => get(`/api/history/daily?days=${days}`),
   recentTrades: (days = 7) => get(`/api/trades/recent?days=${days}`),
 };

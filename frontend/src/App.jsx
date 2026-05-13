@@ -6,6 +6,7 @@ import DailyTradeLog from "./components/DailyTradeLog";
 import LearningSummary from "./components/LearningSummary";
 import TabBar from "./components/TabBar";
 import HistoryTab from "./components/HistoryTab";
+import OpenPositions from "./components/OpenPositions";
 import "./App.css";
 
 export default function App() {
@@ -15,23 +16,26 @@ export default function App() {
   const [winRateHistory, setWinRateHistory] = useState([]);
   const [trades, setTrades] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [openPositions, setOpenPositions] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function loadAll() {
     try {
-      const [sum, st, wrh, tod, les] = await Promise.all([
+      const [sum, st, wrh, tod, les, open] = await Promise.all([
         api.summary(),
         api.stats(),
         api.winRateHistory(90),
         api.todaysTrades(),
         api.lessons(),
+        api.openPositions(),
       ]);
       setSummary(sum);
       setStats(st);
       setWinRateHistory(wrh);
       setTrades(tod);
       setLessons(les);
+      setOpenPositions(open);
       setError(null);
     } catch (e) {
       setError(e.message);
@@ -64,6 +68,7 @@ export default function App() {
           <>
             <PerformanceStats summary={summary} stats={stats} />
             <WinRateChart data={winRateHistory} />
+            <OpenPositions positions={openPositions} />
             <div className="bottom-grid">
               <DailyTradeLog trades={trades} />
               <LearningSummary lessons={lessons} />
