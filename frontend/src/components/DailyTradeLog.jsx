@@ -1,8 +1,8 @@
-export default function DailyTradeLog({ trades }) {
+export default function DailyTradeLog({ trades, title = "Today's Trades" }) {
   if (!trades || trades.length === 0) {
     return (
       <div className="section">
-        <h2 className="section-title">Today's Trades</h2>
+        <h2 className="section-title">{title}</h2>
         <div className="empty-state">No trades today.</div>
       </div>
     );
@@ -10,7 +10,7 @@ export default function DailyTradeLog({ trades }) {
 
   return (
     <div className="section">
-      <h2 className="section-title">Today's Trades</h2>
+      <h2 className="section-title">{title}</h2>
 
       {/* Desktop table */}
       <div className="table-wrapper">

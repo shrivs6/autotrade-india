@@ -58,7 +58,14 @@ export default function PerformanceStats({ summary, stats }) {
       <div className="stat-card">
         <div className="stat-label">Open Positions</div>
         <div className="stat-value">{summary?.open_positions ?? 0}</div>
-        <div className="stat-sub">Model: {summary?.model_version ?? "none"}</div>
+        <div className="stat-sub">
+          Model: {summary?.model_version ?? "none"}
+          {summary?.model_auc != null && (
+            <span style={{ marginLeft: 4, color: summary.model_auc >= 0.55 ? "#22c55e" : "#f59e0b" }}>
+              ({(summary.model_auc * 100).toFixed(1)}% AUC)
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="stat-card">

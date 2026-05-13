@@ -184,7 +184,7 @@ export default function HistoryTab() {
           </div>
 
           {/* Full trade list */}
-          <DailyTradeLog trades={normalisedTrades} />
+          <DailyTradeLog trades={normalisedTrades} title="All Trades" />
         </>
       )}
     </div>

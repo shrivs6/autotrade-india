@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 
 # Only trade when model confidence exceeds this
-CONFIDENCE_THRESHOLD = 0.60
+CONFIDENCE_THRESHOLD = 0.50
 
 _model = None
 

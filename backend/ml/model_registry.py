@@ -106,3 +106,10 @@ def get_production_version() -> str | None:
     registry = _load_registry()
     prod = registry.get(PRODUCTION_KEY)
     return prod.get("promoted_from") if prod else None
+
+
+def get_production_auc() -> float | None:
+    """Returns AUC of the current production model."""
+    registry = _load_registry()
+    prod = registry.get(PRODUCTION_KEY)
+    return prod.get("auc") if prod else None
