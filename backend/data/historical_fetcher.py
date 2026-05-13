@@ -151,6 +151,36 @@ def fetch_daily_for_symbol(client, db, symbol: str, years_back: int = 5):
         return 0
 
 
+def refresh_todays_candles():
+    """
+    Fetches today's 5-min candles for all Nifty 50 symbols and upserts to DB.
+    Called at the start of each scan cycle so feature builder has live data.
+    Safe to call repeatedly — upsert skips already-stored candles.
+    """
+    client = get_upstox_client()
+    db = SessionLocal()
+    today_str = datetime.today().strftime("%Y-%m-%d")
+    total = 0
+    failed = []
+
+    try:
+        for symbol in NIFTY50_SYMBOLS:
+            try:
+                df = client.fetch_historical(symbol, "5minute", today_str, today_str)
+                inserted = upsert_5min(db, df, symbol)
+                total += inserted
+                time.sleep(RATE_LIMIT_SLEEP)
+            except Exception as e:
+                logger.error(f"refresh_todays_candles: {symbol} failed: {e}")
+                failed.append(symbol)
+
+        logger.info(f"Live candle refresh: {total} new candles upserted, {len(failed)} failed")
+        if failed:
+            logger.warning(f"Failed symbols: {failed}")
+    finally:
+        db.close()
+
+
 def run_full_backfill():
     """
     Main entry point. Fetches all historical data for all Nifty 50 stocks.

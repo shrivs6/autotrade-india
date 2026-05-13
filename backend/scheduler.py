@@ -87,6 +87,10 @@ def job_scan_and_trade():
         from backend.data.upstox_client import get_upstox_client
         from backend.utils.constants import NIFTY50_SYMBOLS
 
+        # Fetch today's live candles so feature builder has fresh data
+        from backend.data.historical_fetcher import refresh_todays_candles
+        refresh_todays_candles()
+
         client = get_upstox_client()
         current_prices = {}
         signals_found = 0
