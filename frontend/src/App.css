@@ -49,6 +49,54 @@ body {
   color: #e2e8f0;
 }
 
+/* Scanner status strip */
+.scanner-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  margin-top: -12px;       /* pulls strip up to connect with stats-bar bottom margin */
+  margin-bottom: 20px;
+  font-size: 0.78rem;
+  color: #9ca3af;
+  background: #0f1117;
+  border: 1px solid #1e2536;
+  border-radius: 0 0 8px 8px;
+  flex-wrap: wrap;
+}
+
+.scanner-badge {
+  background: #1e3a5f;
+  color: #60a5fa;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.scanner-dot {
+  color: #4b5563;
+}
+
+.scanner-inactive {
+  color: #6b7280;
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .scanner-status {
+    gap: 6px;
+    padding: 8px 12px;
+    margin-top: 6px;
+    border-radius: 8px;
+  }
+  .scanner-dot {
+    display: none;
+  }
+}
+
 /* Tab bar */
 .tab-bar {
   display: flex;
@@ -114,7 +162,7 @@ body {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 @media (max-width: 1024px) {

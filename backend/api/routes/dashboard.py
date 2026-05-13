@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from datetime import date, datetime, timedelta
 import pytz
 from backend.database.connection import SessionLocal
-from backend.database.models import Trade, ModelPerformance, Lesson, MarketContext
+from backend.database.models import Trade, ModelPerformance, Lesson, MarketContext, TradeSignal
 from backend.trading.position_tracker import get_position_tracker
 from backend.trading.risk_manager import get_risk_manager
 from backend.ml.model_registry import get_production_version
@@ -40,6 +40,19 @@ def get_summary():
         )
         status = "TRADING" if market_open else "MARKET CLOSED"
 
+        # Scanner status
+        today_start_utc = datetime.combine(today, datetime.min.time())
+        today_start_ist = IST.localize(today_start_utc)
+        signals_today = db.query(TradeSignal).filter(
+            TradeSignal.timestamp >= today_start_ist
+        ).count()
+        last_signal = (
+            db.query(TradeSignal)
+            .order_by(TradeSignal.timestamp.desc())
+            .first()
+        )
+        last_scan_time = last_signal.timestamp.isoformat() if last_signal else None
+
         return {
             "date": today.isoformat(),
             "status": status,
@@ -51,6 +64,8 @@ def get_summary():
             "open_positions": get_position_tracker().count(),
             "daily_pnl_limit_hit": get_risk_manager().trading_halted,
             "model_version": get_production_version() or "none",
+            "signals_today": signals_today,
+            "last_scan_time": last_scan_time,
         }
     finally:
         db.close()

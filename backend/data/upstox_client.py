@@ -14,6 +14,14 @@ logger = get_logger(__name__)
 
 STUB_MODE = os.getenv("STUB_MODE", "True").strip().lower() not in ("false", "0", "no")
 
+# NSE symbol overrides — maps our internal symbol → actual Upstox tradingsymbol
+# INFOSYS: listed as INFY on NSE
+# TATAMOTORS: demerged into TMCV (commercial vehicles) + TMPV (passenger vehicles)
+SYMBOL_OVERRIDES = {
+    "INFOSYS": "INFY",
+    "TATAMOTORS": "TMCV",
+}
+
 
 def _build_instrument_map() -> dict:
     """Download Upstox instruments CSV and return {trading_symbol: instrument_key}."""
@@ -101,7 +109,8 @@ class UpstoxClient:
             client = upstox_client.ApiClient(config)
             api = upstox_client.HistoryApi(client)
 
-            instrument_key = self._instrument_map.get(symbol, f"NSE_EQ|{symbol}")
+            lookup = SYMBOL_OVERRIDES.get(symbol, symbol)
+            instrument_key = self._instrument_map.get(lookup, f"NSE_EQ|{lookup}")
             # Upstox v2 dropped "5minute" — fetch 1min and resample
             api_interval = "1minute" if interval == "5minute" else interval
             response = api.get_historical_candle_data1(
@@ -149,7 +158,8 @@ class UpstoxClient:
             client = upstox_client.ApiClient(config)
             api = upstox_client.HistoryApi(client)
 
-            instrument_key = self._instrument_map.get(symbol, f"NSE_EQ|{symbol}")
+            lookup = SYMBOL_OVERRIDES.get(symbol, symbol)
+            instrument_key = self._instrument_map.get(lookup, f"NSE_EQ|{lookup}")
             api_interval = "1minute" if interval == "5minute" else interval
             response = api.get_intra_day_candle_data(
                 instrument_key=instrument_key,
@@ -193,7 +203,8 @@ class UpstoxClient:
             config.access_token = self.access_token
             client = upstox_client.ApiClient(config)
             api = upstox_client.MarketQuoteApi(client)
-            instrument_key = self._instrument_map.get(symbol, f"NSE_EQ|{symbol}")
+            lookup = SYMBOL_OVERRIDES.get(symbol, symbol)
+            instrument_key = self._instrument_map.get(lookup, f"NSE_EQ|{lookup}")
             response = api.ltp(
                 symbol=instrument_key,
                 api_version="2.0",

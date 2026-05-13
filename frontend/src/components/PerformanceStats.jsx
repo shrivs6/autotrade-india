@@ -1,5 +1,15 @@
+function relativeTime(isoStr) {
+  if (!isoStr) return null;
+  const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
+  return null;
+}
+
 export default function PerformanceStats({ summary, stats }) {
   const statusColor = summary?.status === "TRADING" ? "#22c55e" : "#f59e0b";
+  const lastScanLabel = relativeTime(summary?.last_scan_time);
 
   function fmt(val, prefix = "") {
     if (val == null) return "—";
@@ -19,6 +29,7 @@ export default function PerformanceStats({ summary, stats }) {
   }
 
   return (
+    <>
     <div className="stats-bar">
       <div className="stat-card">
         <div className="stat-label">Today's PnL</div>
@@ -58,5 +69,17 @@ export default function PerformanceStats({ summary, stats }) {
         <div className="stat-sub">{summary?.date ?? ""}</div>
       </div>
     </div>
+
+    <div className="scanner-status">
+      <span className="scanner-badge">Paper Trading</span>
+      <span className="scanner-dot">·</span>
+      {lastScanLabel
+        ? <span>Scanner last ran: <strong>{lastScanLabel}</strong></span>
+        : <span className="scanner-inactive">Scanner not yet active today</span>
+      }
+      <span className="scanner-dot">·</span>
+      <span>Signals today: <strong>{summary?.signals_today ?? 0}</strong></span>
+    </div>
+    </>
   );
 }
