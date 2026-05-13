@@ -16,7 +16,8 @@ ALERT_EMAIL = os.getenv("ALERT_EMAIL", "")
 ALERT_EMAIL_PASSWORD = os.getenv("ALERT_EMAIL_PASSWORD", "")
 
 # Risk parameters
-MAX_POSITION_EXPOSURE = 100000   # ₹1,00,000 per trade
+MAX_POSITION_EXPOSURE = 100000   # ₹1,00,000 capital per trade
+INTRADAY_MARGIN_MULTIPLIER = 5   # 5x MIS margin (SEBI standard for intraday)
 MAX_CONCURRENT_POSITIONS = 3
 DAILY_LOSS_LIMIT = -5000         # halt trading if PnL drops below this
 STOP_LOSS_PCT = 0.005            # 0.5%

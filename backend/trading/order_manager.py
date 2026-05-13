@@ -156,29 +156,34 @@ def close_trade(trade_id: int, exit_price: float, exit_reason: str):
     risk = get_risk_manager()
     position = tracker.get(trade_id)
 
-    if not position:
-        logger.warning(f"close_trade: trade_id {trade_id} not found in tracker")
-        return
-
-    pnl = calc_pnl(position["direction"], position["entry_price"], exit_price, position["quantity"])
-
     db = SessionLocal()
     try:
         trade = db.query(Trade).filter(Trade.id == trade_id).first()
-        if trade:
-            trade.exit_price = exit_price
-            trade.exit_time = datetime.now(IST)
-            trade.exit_reason = exit_reason
-            trade.pnl = pnl
-            trade.status = "closed"
-            db.commit()
+        if not trade:
+            logger.warning(f"close_trade: trade_id {trade_id} not found in DB")
+            return
+
+        # Fall back to DB values if not in memory tracker (e.g. after server restart)
+        direction = position["direction"] if position else trade.direction
+        entry_price = position["entry_price"] if position else trade.entry_price
+        quantity = position["quantity"] if position else trade.quantity
+        symbol = position["symbol"] if position else trade.symbol
+
+        pnl = calc_pnl(direction, entry_price, exit_price, quantity)
+
+        trade.exit_price = exit_price
+        trade.exit_time = datetime.now(IST)
+        trade.exit_reason = exit_reason
+        trade.pnl = pnl
+        trade.status = "closed"
+        db.commit()
 
         tracker.remove(trade_id)
         risk.record_pnl(pnl)
 
         result = "WIN" if pnl > 0 else "LOSS"
         logger.info(
-            f"TRADE CLOSED #{trade_id}: {position['symbol']} | {exit_reason} | "
+            f"TRADE CLOSED #{trade_id}: {symbol} | {exit_reason} | "
             f"₹{exit_price} | PnL: ₹{pnl:+,.0f} [{result}]"
         )
 
@@ -192,22 +197,26 @@ def close_trade(trade_id: int, exit_price: float, exit_reason: str):
 def square_off_all():
     """
     Called at 3:20 PM — force closes all open positions at current market price.
-    Uses last known price from features (close_price). In live mode uses LTP.
+    Reads from DB so it works correctly even after a server restart.
     """
-    tracker = get_position_tracker()
-    positions = tracker.get_all()
+    db = SessionLocal()
+    try:
+        open_trades = db.query(Trade).filter(Trade.status == "open").all()
+    finally:
+        db.close()
 
-    if not positions:
+    if not open_trades:
         logger.info("Square off: no open positions")
         return
 
-    logger.info(f"Square off: closing {len(positions)} open position(s)")
+    logger.info(f"Square off: closing {len(open_trades)} open position(s)")
 
-    for position in positions:
-        symbol = position["symbol"]
+    from backend.data.upstox_client import get_upstox_client
+    client = get_upstox_client()
+
+    for trade in open_trades:
         try:
-            from backend.data.upstox_client import get_upstox_client
-            ltp = get_upstox_client().fetch_ltp(symbol)
-            close_trade(position["trade_id"], ltp, "eod_squareoff")
+            ltp = client.fetch_ltp(trade.symbol)
+            close_trade(trade.id, ltp, "eod_squareoff")
         except Exception as e:
-            logger.error(f"Failed to square off {symbol}: {e}")
+            logger.error(f"Failed to square off {trade.symbol}: {e}")

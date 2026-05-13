@@ -14,6 +14,7 @@ import math
 from dataclasses import dataclass
 from backend.config import (
     MAX_POSITION_EXPOSURE,
+    INTRADAY_MARGIN_MULTIPLIER,
     MAX_CONCURRENT_POSITIONS,
     DAILY_LOSS_LIMIT,
     STOP_LOSS_PCT,
@@ -65,7 +66,7 @@ class RiskManager:
         stop_loss = 0.5% from entry
         target = 0.75% from entry
         """
-        quantity = math.floor(MAX_POSITION_EXPOSURE / entry_price)
+        quantity = math.floor(MAX_POSITION_EXPOSURE * INTRADAY_MARGIN_MULTIPLIER / entry_price)
         if quantity == 0:
             quantity = 1  # minimum 1 share
 
