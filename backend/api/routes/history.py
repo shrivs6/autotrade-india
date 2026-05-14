@@ -53,6 +53,14 @@ def get_daily_summary(days: int = 30):
         db.close()
 
 
+@router.post("/admin/squareoff")
+def trigger_squareoff():
+    """Manually trigger EOD square-off. Closes all open positions at last known price."""
+    from backend.trading.order_manager import square_off_all
+    square_off_all()
+    return {"status": "square-off complete — check dashboard"}
+
+
 @router.post("/admin/retrain")
 def trigger_retrain(background_tasks: BackgroundTasks):
     """Manually trigger nightly retrain. Runs in background — check Railway logs for progress."""

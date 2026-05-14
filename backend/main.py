@@ -16,11 +16,39 @@ logger = get_logger(__name__)
 scheduler = create_scheduler()
 
 
+def _startup_square_off():
+    """If server restarts after 3:20pm on a weekday, close any positions that were missed."""
+    from datetime import datetime
+    import pytz
+    IST = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(IST)
+    if now.weekday() >= 5:
+        return  # weekend
+    market_closed = now.hour > 15 or (now.hour == 15 and now.minute >= 20)
+    if not market_closed:
+        return
+    try:
+        from backend.trading.order_manager import square_off_all
+        from backend.database.connection import SessionLocal
+        from backend.database.models import Trade
+        db = SessionLocal()
+        try:
+            count = db.query(Trade).filter(Trade.status == "open").count()
+        finally:
+            db.close()
+        if count > 0:
+            logger.warning(f"Startup: found {count} open position(s) after market close — squaring off")
+            square_off_all()
+    except Exception as e:
+        logger.error(f"Startup square-off failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting AutoTrade India backend...")
     Base.metadata.create_all(bind=engine, checkfirst=True)
     logger.info("DB tables verified.")
+    _startup_square_off()
     scheduler.start()
     logger.info("Scheduler started. Jobs registered:")
     for job in scheduler.get_jobs():

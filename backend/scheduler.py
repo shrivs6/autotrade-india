@@ -68,14 +68,14 @@ def job_confirm_bias():
 
 
 def job_scan_and_trade():
-    """9:30 AM–3:20 PM every 5 min — scan all stocks and place trades."""
+    """9:30 AM–3:00 PM every 5 min — scan all stocks and place trades."""
     from datetime import datetime
     now = datetime.now(IST)
 
-    # Only trade during market hours
+    # Only trade during market hours — no new entries after 3:00 PM
     if now.hour < 9 or (now.hour == 9 and now.minute < 30):
         return
-    if now.hour > 15 or (now.hour == 15 and now.minute >= 20):
+    if now.hour >= 15:
         return
 
     logger.info(f"=== [{now.strftime('%H:%M')}] Scanning {50} stocks ===")
@@ -165,7 +165,7 @@ def create_scheduler() -> BackgroundScheduler:
         CronTrigger(hour="9-15", minute="*/5", day_of_week="mon-fri", timezone=IST),
         id="scan_and_trade"
     )
-    scheduler.add_job(job_square_off, CronTrigger(hour=15, minute=20, timezone=IST), id="square_off")
+    scheduler.add_job(job_square_off, CronTrigger(hour=15, minute=15, timezone=IST), id="square_off")
     scheduler.add_job(job_post_market, CronTrigger(hour=15, minute=45, timezone=IST), id="post_market")
     scheduler.add_job(job_nightly_retrain, CronTrigger(hour=23, minute=0, timezone=IST), id="nightly_retrain")
 
