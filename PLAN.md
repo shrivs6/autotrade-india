@@ -15,17 +15,33 @@
 | Phase 2 — Feature Engineering | ✅ Done | 27-feature vector, signal_features table backfilled (716k rows) |
 | Phase 3 — Rule-Based Paper Trading | ✅ Done | Paper broker, risk manager, order manager, post-market review, lessons |
 | Phase 4 — ML Training + Backtesting | ✅ Done | XGBoost trained (v1_initial), walk-forward validated, backtester built |
-| Phase 5 — Live Paper Trading + Dashboard | ✅ Done | ML signal evaluator, all API routes, React dashboard deployed. Backend: Railway. Frontend: Vercel. |
-| Phase 6 — Real Money + Claude Layer | ⏳ Blocked | Gate: 60%+ win rate for 30 consecutive days on real data. |
+| Phase 5 — Live Paper Trading + Dashboard | 🔄 Active | Pivoted to NIFTY + BANKNIFTY futures (2026-05-16). Accumulating data, nightly retrains running. |
+| Phase 6 — Real Money + Claude Layer | ⏳ Blocked | Gate: 60%+ win rate for 30 consecutive days on NIFTY/BANKNIFTY data. |
+
+### Instrument Pivot (2026-05-16)
+Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index futures (NSE_FO)** only.
+
+**Why:** Higher liquidity, fewer instruments to scan, multiple intraday re-entries on same instrument.
+
+**What changed:**
+- `constants.py`: `NIFTY50_SYMBOLS = ["NIFTY", "BANKNIFTY"]`, `NSE_SEGMENT = "NSE_FO"`, added `LOT_SIZES = {"NIFTY": 75, "BANKNIFTY": 30}`
+- `upstox_client.py`: Near-month futures contract resolved dynamically from `complete.csv.gz` (FUTIDX type, NSE_FO exchange). Refreshes daily. Daily interval for futures is `"day"` not `"1day"`.
+- `risk_manager.py`: Lot-based MIS sizing at 15% margin. `MAX_POSITION_EXPOSURE = ₹3,00,000` (sized for 1 NIFTY lot).
+- `scheduler.py`: Square-off moved from 3:20 PM → **3:00 PM** (Upstox stops serving quotes around 3:15 PM).
+- DB cleared: trades, signal_features, trade_signals, ohlcv_5min all reset. Fresh start.
+- Backfilled: 6,450 × 5-min candles + 104 daily candles (Mar–May 2026, current contract only).
+
+**Futures data limitation:** Each futures contract only carries ~2 months of history (from when it starts trading). Data will accumulate organically each trading day.
 
 ### Known Fixes Applied
 - `upstox-python-sdk` pinned to `2.26.0` (v2.8.0 no longer exists on PyPI)
 - Railway env vars must be set without quotes in the Variables tab
-- Upstox v2.26 API changes (does NOT affect trading strategy — 5-min candles in DB unchanged):
+- Upstox v2.26 API changes:
   - `ApiClient` no longer supports context manager (`with` syntax) — use direct instantiation
   - `5minute` interval removed — fetch `1minute` and resample to 5-min via pandas `resample("5min").agg()`
-  - Instrument key format changed from `NSE_EQ|SYMBOL` to `NSE_EQ|ISIN` — load mapping from Upstox instruments CSV at startup
-  - 1-minute data limited to 30 days per request — changed chunk size from 3 months to 30 days
+  - NSE-FO.csv.gz returns 403 publicly — use `complete.csv.gz` with `instrument_type=FUTIDX` filter instead
+  - Daily candle interval for NSE_FO must be `"day"` not `"1day"`
+  - 1-minute data limited to 30 days per request — chunk size 30 days
 - OAuth token stored in `upstox_token` DB table (Railway filesystem is ephemeral, files reset on redeploy)
 - Daily token refresh: visit `https://web-production-0db02.up.railway.app/auth/login` each morning before 9:15am
 
