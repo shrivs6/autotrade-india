@@ -163,7 +163,13 @@ class UpstoxClient:
 
             instrument_key = self._get_instrument_key(symbol)
             # Upstox v2 dropped "5minute" — fetch 1min and resample
-            api_interval = "1minute" if interval == "5minute" else interval
+            # NSE_FO futures use "day" not "1day" for daily interval
+            if interval == "5minute":
+                api_interval = "1minute"
+            elif interval == "1day":
+                api_interval = "day"
+            else:
+                api_interval = interval
             response = api.get_historical_candle_data1(
                 instrument_key=instrument_key,
                 interval=api_interval,
