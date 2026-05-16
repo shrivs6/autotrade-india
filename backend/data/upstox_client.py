@@ -2,11 +2,19 @@
 Upstox API client.
 STUB_MODE is controlled by the STUB_MODE env variable (True/False).
 When False, reads the access token from the DB (saved via /auth/callback).
+
+Instruments traded: NIFTY and BANKNIFTY index futures (NSE_FO segment).
+The near-month futures contract is resolved dynamically from the NSE_FO
+instrument CSV published by Upstox, and cached for the trading day.
 """
 import os
+import gzip
+import io
+import csv
+import requests as req
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from backend.config import UPSTOX_API_KEY, UPSTOX_API_SECRET, UPSTOX_REDIRECT_URI
 from backend.utils.logger import get_logger
 
@@ -14,34 +22,60 @@ logger = get_logger(__name__)
 
 STUB_MODE = os.getenv("STUB_MODE", "True").strip().lower() not in ("false", "0", "no")
 
-# NSE symbol overrides — maps our internal symbol → actual Upstox tradingsymbol
-# INFOSYS: listed as INFY on NSE
-# TATAMOTORS: demerged into TMCV (commercial vehicles) + TMPV (passenger vehicles)
-SYMBOL_OVERRIDES = {
-    "INFOSYS": "INFY",
-    "TATAMOTORS": "TMCV",
+# Realistic stub price ranges for index futures
+_STUB_PRICES = {
+    "NIFTY": (22000, 26000),
+    "BANKNIFTY": (47000, 54000),
 }
+_STUB_PRICE_DEFAULT = (500, 3000)
 
 
-def _build_instrument_map() -> dict:
-    """Download Upstox instruments CSV and return {trading_symbol: instrument_key}."""
+def _build_futures_instrument_map(base_symbols: list) -> dict:
+    """
+    Download the NSE_FO instruments CSV from Upstox and return a dict mapping
+    {base_symbol: near_month_instrument_key} for the given futures symbols.
+
+    Near-month = the non-expired contract with the earliest expiry date.
+    """
     try:
-        import gzip, io, csv
-        import requests as req
-        url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.csv.gz"
+        url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE-FO.csv.gz"
         r = req.get(url, timeout=30)
         r.raise_for_status()
+
+        today = date.today()
+        # Collect all non-expired FUT contracts per base symbol
+        candidates: dict[str, list] = {sym: [] for sym in base_symbols}
+
         with gzip.open(io.BytesIO(r.content), "rt") as f:
             reader = csv.DictReader(f)
-            mapping = {
-                row["tradingsymbol"]: row["instrument_key"]
-                for row in reader
-                if row.get("instrument_type") == "EQUITY"
-            }
-        logger.info(f"Loaded {len(mapping)} instrument keys from Upstox")
-        return mapping
+            for row in reader:
+                if row.get("instrument_type") != "FUT":
+                    continue
+                name = row.get("name", "")
+                if name not in candidates:
+                    continue
+                expiry_str = row.get("expiry", "")
+                try:
+                    expiry_date = date.fromisoformat(expiry_str)
+                except ValueError:
+                    continue
+                if expiry_date < today:
+                    continue  # skip expired contracts
+                candidates[name].append((expiry_date, row["instrument_key"]))
+
+        result = {}
+        for symbol, contracts in candidates.items():
+            if not contracts:
+                logger.warning(f"No active futures contract found for {symbol}")
+                continue
+            contracts.sort(key=lambda x: x[0])  # nearest expiry first
+            expiry, key = contracts[0]
+            result[symbol] = key
+            logger.info(f"Futures key resolved: {symbol} → {key} (expiry {expiry})")
+
+        return result
     except Exception as e:
-        logger.error(f"Failed to load instrument map: {e}")
+        logger.error(f"Failed to load futures instrument map: {e}")
         return {}
 
 
@@ -67,10 +101,11 @@ def _load_token_from_db() -> str | None:
 class UpstoxClient:
     def __init__(self):
         self.access_token = None
-        self._instrument_map = {}
+        self._instrument_map: dict = {}      # {base_symbol: instrument_key}
+        self._instrument_map_date: date | None = None
         if not STUB_MODE:
             self._load_token()
-            self._instrument_map = _build_instrument_map()
+            self._refresh_instrument_map()
 
     def _load_token(self):
         token = _load_token_from_db()
@@ -83,10 +118,23 @@ class UpstoxClient:
                 "https://web-production-0db02.up.railway.app/auth/login to authenticate."
             )
 
+    def _refresh_instrument_map(self):
+        """Rebuild futures instrument map. Called at startup and once per trading day."""
+        from backend.utils.constants import NIFTY50_SYMBOLS
+        self._instrument_map = _build_futures_instrument_map(NIFTY50_SYMBOLS)
+        self._instrument_map_date = date.today()
+
+    def _get_instrument_key(self, symbol: str) -> str:
+        """Return the live futures instrument key for a base symbol, refreshing daily."""
+        if not STUB_MODE:
+            if self._instrument_map_date != date.today():
+                self._refresh_instrument_map()
+        return self._instrument_map.get(symbol, f"NSE_FO|{symbol}")
+
     def reload_token(self, access_token: str):
         """Called after /callback saves a new token."""
         self.access_token = access_token
-        self._instrument_map = _build_instrument_map()
+        self._refresh_instrument_map()
         logger.info("Upstox token reloaded in client.")
 
     def fetch_historical(
@@ -109,8 +157,7 @@ class UpstoxClient:
             client = upstox_client.ApiClient(config)
             api = upstox_client.HistoryApi(client)
 
-            lookup = SYMBOL_OVERRIDES.get(symbol, symbol)
-            instrument_key = self._instrument_map.get(lookup, f"NSE_EQ|{lookup}")
+            instrument_key = self._get_instrument_key(symbol)
             # Upstox v2 dropped "5minute" — fetch 1min and resample
             api_interval = "1minute" if interval == "5minute" else interval
             response = api.get_historical_candle_data1(
@@ -158,8 +205,7 @@ class UpstoxClient:
             client = upstox_client.ApiClient(config)
             api = upstox_client.HistoryApi(client)
 
-            lookup = SYMBOL_OVERRIDES.get(symbol, symbol)
-            instrument_key = self._instrument_map.get(lookup, f"NSE_EQ|{lookup}")
+            instrument_key = self._get_instrument_key(symbol)
             api_interval = "1minute" if interval == "5minute" else interval
             response = api.get_intra_day_candle_data(
                 instrument_key=instrument_key,
@@ -192,7 +238,8 @@ class UpstoxClient:
 
     def fetch_ltp(self, symbol: str) -> float:
         if STUB_MODE:
-            return round(np.random.uniform(500, 3000), 2)
+            lo, hi = _STUB_PRICES.get(symbol, _STUB_PRICE_DEFAULT)
+            return round(np.random.uniform(lo, hi), 2)
 
         if not self.access_token:
             raise RuntimeError("No Upstox token. Visit /auth/login to authenticate.")
@@ -203,8 +250,7 @@ class UpstoxClient:
             config.access_token = self.access_token
             client = upstox_client.ApiClient(config)
             api = upstox_client.MarketQuoteApi(client)
-            lookup = SYMBOL_OVERRIDES.get(symbol, symbol)
-            instrument_key = self._instrument_map.get(lookup, f"NSE_EQ|{lookup}")
+            instrument_key = self._get_instrument_key(symbol)
             response = api.ltp(
                 symbol=instrument_key,
                 api_version="2.0",
@@ -228,13 +274,14 @@ class UpstoxClient:
         else:
             timestamps = pd.date_range(start=start, end=end, freq="B")
         n = len(timestamps)
-        base_price = np.random.uniform(500, 3000)
+        lo, hi = _STUB_PRICES.get(symbol, _STUB_PRICE_DEFAULT)
+        base_price = np.random.uniform(lo, hi)
         returns = np.random.normal(0, 0.002, n)
         closes = base_price * np.exp(np.cumsum(returns))
         opens = closes * np.random.uniform(0.998, 1.002, n)
         highs = np.maximum(opens, closes) * np.random.uniform(1.001, 1.005, n)
         lows = np.minimum(opens, closes) * np.random.uniform(0.995, 0.999, n)
-        volumes = np.random.uniform(10000, 500000, n)
+        volumes = np.random.uniform(100000, 5000000, n)
         return pd.DataFrame({
             "timestamp": timestamps,
             "open": opens,

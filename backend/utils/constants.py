@@ -1,18 +1,13 @@
-NIFTY50_SYMBOLS = [
-    "RELIANCE", "TCS", "HDFCBANK", "BHARTIARTL", "ICICIBANK",
-    "INFOSYS", "SBIN", "HINDUNILVR", "ITC", "LT",
-    "KOTAKBANK", "HCLTECH", "MARUTI", "AXISBANK", "ASIANPAINT",
-    "BAJFINANCE", "NTPC", "ONGC", "POWERGRID", "ULTRACEMCO",
-    "WIPRO", "M&M", "NESTLEIND", "TITAN", "ADANIENT",
-    "ADANIPORTS", "COALINDIA", "BAJAJFINSV", "SUNPHARMA", "TATAMOTORS",
-    "TATASTEEL", "TECHM", "GRASIM", "INDUSINDBK", "HINDALCO",
-    "JSWSTEEL", "BPCL", "DRREDDY", "CIPLA", "EICHERMOT",
-    "BRITANNIA", "DIVISLAB", "APOLLOHOSP", "TATACONSUM", "HEROMOTOCO",
-    "SHRIRAMFIN", "BAJAJ-AUTO", "HDFCLIFE", "SBILIFE", "BEL"
-]
+NIFTY50_SYMBOLS = ["NIFTY", "BANKNIFTY"]
 
-# NSE exchange segment for Upstox
-NSE_SEGMENT = "NSE_EQ"
+# NSE exchange segment for Upstox — NSE_FO for index futures
+NSE_SEGMENT = "NSE_FO"
+
+# Lot sizes per futures instrument (SEBI-mandated contract sizes)
+LOT_SIZES = {
+    "NIFTY": 75,
+    "BANKNIFTY": 30,
+}
 
 # Candle intervals
 INTERVAL_5MIN = "5minute"

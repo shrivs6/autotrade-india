@@ -24,7 +24,7 @@ def _startup_square_off():
     now = datetime.now(IST)
     if now.weekday() >= 5:
         return  # weekend
-    market_closed = now.hour > 15 or (now.hour == 15 and now.minute >= 20)
+    market_closed = now.hour > 15 or (now.hour == 15 and now.minute >= 0)
     if not market_closed:
         return
     try:

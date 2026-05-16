@@ -4,22 +4,25 @@ Every trade must pass through here before being placed.
 Bugs in this file = real money loss. Test thoroughly.
 
 Rules enforced:
-- Max ₹1,00,000 exposure per trade
+- Max ₹1,00,000 capital budget per trade (used to size lots)
+- Futures MIS margin: ~15% of notional per lot (SPAN + Exposure)
+- Quantity must be an integer multiple of the instrument's lot size
 - Stop loss: 0.5% from entry
 - Target: 0.75% from entry (1.5:1 R:R)
 - Max 3 concurrent open positions
 - Daily loss limit: halt trading if PnL < -₹5,000
+- Sequential re-entry allowed: same instrument can trade again after previous trade closes
 """
 import math
 from dataclasses import dataclass
 from backend.config import (
     MAX_POSITION_EXPOSURE,
-    INTRADAY_MARGIN_MULTIPLIER,
     MAX_CONCURRENT_POSITIONS,
     DAILY_LOSS_LIMIT,
     STOP_LOSS_PCT,
     TARGET_PCT,
 )
+from backend.utils.constants import LOT_SIZES
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -62,14 +65,24 @@ class RiskManager:
     def compute_trade_params(self, symbol: str, direction: str, entry_price: float) -> TradeParams:
         """
         Given a symbol, direction, and entry price — compute all trade parameters.
-        quantity = floor(MAX_EXPOSURE / entry_price)
+
+        Futures MIS sizing:
+          lots = floor(MAX_POSITION_EXPOSURE / (entry_price * lot_size * 0.15))
+          quantity = max(1 lot) * lot_size
         stop_loss = 0.5% from entry
         target = 0.75% from entry
         """
-        quantity = math.floor(MAX_POSITION_EXPOSURE * INTRADAY_MARGIN_MULTIPLIER / entry_price)
-        if quantity == 0:
-            quantity = 1  # minimum 1 share
-
+        FUTURES_MIS_MARGIN_PCT = 0.15   # ~15% SPAN + Exposure for intraday MIS
+        lot_size = LOT_SIZES.get(symbol, 1)
+        notional_per_lot = entry_price * lot_size
+        lots = math.floor(MAX_POSITION_EXPOSURE / (notional_per_lot * FUTURES_MIS_MARGIN_PCT))
+        lots = max(1, lots)             # minimum 1 lot
+        if lots == 1 and notional_per_lot * FUTURES_MIS_MARGIN_PCT > MAX_POSITION_EXPOSURE:
+            logger.warning(
+                f"{symbol}: 1-lot margin (₹{notional_per_lot * FUTURES_MIS_MARGIN_PCT:,.0f}) "
+                f"exceeds capital budget (₹{MAX_POSITION_EXPOSURE:,.0f}). Trading minimum 1 lot."
+            )
+        quantity = lots * lot_size
         exposure = entry_price * quantity
 
         if direction == "long":
@@ -100,10 +113,10 @@ class RiskManager:
         if len(open_positions) >= MAX_CONCURRENT_POSITIONS:
             return False, f"Max concurrent positions reached ({MAX_CONCURRENT_POSITIONS})"
 
-        # No duplicate positions on same symbol
+        # Block only if this exact symbol is currently open (not closed)
         open_symbols = [p["symbol"] for p in open_positions]
         if symbol in open_symbols:
-            return False, f"Already have open position in {symbol}"
+            return False, f"Already have an open position in {symbol}"
 
         return True, "approved"
 

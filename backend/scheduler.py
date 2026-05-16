@@ -68,11 +68,11 @@ def job_confirm_bias():
 
 
 def job_scan_and_trade():
-    """9:30 AM–3:00 PM every 5 min — scan all stocks and place trades."""
+    """9:30 AM–2:55 PM every 5 min — scan all stocks and place trades."""
     from datetime import datetime
     now = datetime.now(IST)
 
-    # Only trade during market hours — no new entries after 3:00 PM
+    # Only trade during market hours — no new entries at or after 3:00 PM (square-off time)
     if now.hour < 9 or (now.hour == 9 and now.minute < 30):
         return
     if now.hour >= 15:
@@ -124,8 +124,8 @@ def job_scan_and_trade():
 
 
 def job_square_off():
-    """3:20 PM — force close all open positions."""
-    logger.info("=== [3:20 PM] Squaring off all open positions ===")
+    """3:00 PM — force close all open positions."""
+    logger.info("=== [3:00 PM] Squaring off all open positions ===")
     try:
         from backend.trading.order_manager import square_off_all
         square_off_all()
@@ -165,7 +165,7 @@ def create_scheduler() -> BackgroundScheduler:
         CronTrigger(hour="9-15", minute="*/5", day_of_week="mon-fri", timezone=IST),
         id="scan_and_trade"
     )
-    scheduler.add_job(job_square_off, CronTrigger(hour=15, minute=15, timezone=IST), id="square_off")
+    scheduler.add_job(job_square_off, CronTrigger(hour=15, minute=0, timezone=IST), id="square_off")
     scheduler.add_job(job_post_market, CronTrigger(hour=15, minute=45, timezone=IST), id="post_market")
     scheduler.add_job(job_nightly_retrain, CronTrigger(hour=23, minute=0, timezone=IST), id="nightly_retrain")
 

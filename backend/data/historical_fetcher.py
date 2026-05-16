@@ -1,14 +1,17 @@
 """
-One-time script to backfill historical OHLCV data for all Nifty 50 stocks.
+One-time script to backfill historical OHLCV data for NIFTY and BANKNIFTY futures.
 
 Run once after Upstox API key is available:
     python -m backend.scripts.run_historical_fetch
 
 What it does:
-- Downloads 1 year of 5-minute candles for all 50 stocks → ohlcv_5min table
-- Downloads 5 years of daily candles for all 50 stocks  → ohlcv_daily table
+- Downloads 1 year of 5-minute candles for NIFTY + BANKNIFTY → ohlcv_5min table
+- Downloads 5 years of daily candles for NIFTY + BANKNIFTY  → ohlcv_daily table
 
-Upstox rate limit: ~2 requests/second → expect 30-45 minutes total.
+Candles are stored under the base symbol (e.g., "NIFTY") regardless of which
+futures contract was active — this allows the ML model to train across rollovers.
+
+Upstox rate limit: ~2 requests/second.
 Safe to re-run — skips candles that already exist (upsert logic).
 """
 import time
@@ -32,17 +35,17 @@ RATE_LIMIT_SLEEP = 0.6   # seconds between requests (~1.6 req/sec, safely under 
 
 
 def seed_stocks(db):
-    """Insert Nifty 50 stocks into the stocks master table if not already there."""
+    """Insert NIFTY and BANKNIFTY futures into the stocks master table if not already there."""
     existing = {s.symbol for s in db.query(Stock).all()}
     new_stocks = [
-        Stock(symbol=sym, name=sym, sector="NSE")
+        Stock(symbol=sym, name=f"{sym} Futures", sector="NSE_FO")
         for sym in NIFTY50_SYMBOLS
         if sym not in existing
     ]
     if new_stocks:
         db.bulk_save_objects(new_stocks)
         db.commit()
-        logger.info(f"Seeded {len(new_stocks)} stocks into stocks table")
+        logger.info(f"Seeded {len(new_stocks)} instruments into stocks table")
     else:
         logger.info("Stocks table already seeded")
 
@@ -182,8 +185,8 @@ def refresh_todays_candles():
 
 def run_full_backfill():
     """
-    Main entry point. Fetches all historical data for all Nifty 50 stocks.
-    Expected runtime: 30-45 minutes with real Upstox API.
+    Main entry point. Fetches all historical data for NIFTY and BANKNIFTY futures.
+    Expected runtime: a few minutes with real Upstox API (only 2 instruments).
     In STUB MODE: completes in seconds with fake data.
     """
     client = get_upstox_client()
