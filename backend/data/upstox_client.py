@@ -38,18 +38,22 @@ def _build_futures_instrument_map(base_symbols: list) -> dict:
     Near-month = the non-expired contract with the earliest expiry date.
     """
     try:
-        url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE-FO.csv.gz"
-        r = req.get(url, timeout=30)
+        # complete.csv.gz is publicly accessible and contains all exchanges including NSE_FO
+        url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.csv.gz"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = req.get(url, headers=headers, timeout=30)
         r.raise_for_status()
 
         today = date.today()
-        # Collect all non-expired FUT contracts per base symbol
+        # Collect all non-expired index futures contracts per base symbol
         candidates: dict[str, list] = {sym: [] for sym in base_symbols}
 
         with gzip.open(io.BytesIO(r.content), "rt") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                if row.get("instrument_type") != "FUT":
+                if row.get("exchange") != "NSE_FO":
+                    continue
+                if row.get("instrument_type") != "FUTIDX":
                     continue
                 name = row.get("name", "")
                 if name not in candidates:
