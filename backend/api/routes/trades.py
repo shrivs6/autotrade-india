@@ -22,6 +22,7 @@ def get_open_trades():
             {
                 "id": t.id,
                 "symbol": t.symbol,
+                "contract": t.contract or t.symbol,
                 "direction": t.direction,
                 "entry_price": t.entry_price,
                 "stop_loss": t.stop_loss,

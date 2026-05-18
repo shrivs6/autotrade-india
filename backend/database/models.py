@@ -77,6 +77,7 @@ class Trade(Base):
     exit_price = Column(Float)
     exit_reason = Column(String(20))                    # target_hit | stop_hit | eod_squareoff
     pnl = Column(Float)
+    contract = Column(String(30))                        # full contract name e.g. NIFTY26MAYFUT
     signal_confidence = Column(Float)                   # ML model probability (null for rule-based)
     model_version = Column(String(20))
     trading_mode = Column(String(10), default="paper")  # paper | live

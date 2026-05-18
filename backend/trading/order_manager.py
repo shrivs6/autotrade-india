@@ -65,8 +65,17 @@ def open_trade(features: dict, direction: str, signal_id: int | None = None) -> 
 
     db = SessionLocal()
     try:
+        # Resolve full contract name (e.g. NIFTY26MAYFUT) for display
+        contract = symbol
+        try:
+            from backend.data.upstox_client import get_upstox_client
+            contract = get_upstox_client().get_contract_name(symbol)
+        except Exception:
+            pass
+
         trade = Trade(
             symbol=symbol,
+            contract=contract,
             direction=direction,
             entry_price=float(fill_price),
             stop_loss=float(params.stop_loss),
@@ -217,6 +226,10 @@ def square_off_all():
     for trade in open_trades:
         try:
             ltp = client.fetch_ltp(trade.symbol)
-            close_trade(trade.id, ltp, "eod_squareoff")
         except Exception as e:
-            logger.error(f"Failed to square off {trade.symbol}: {e}")
+            logger.warning(
+                f"fetch_ltp failed for {trade.symbol}: {e} — "
+                f"squaring off at entry price ₹{trade.entry_price}"
+            )
+            ltp = trade.entry_price  # fallback: close at entry (0 PnL)
+        close_trade(trade.id, ltp, "eod_squareoff")

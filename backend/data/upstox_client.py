@@ -65,7 +65,7 @@ def _build_futures_instrument_map(base_symbols: list) -> dict:
                     continue
                 if expiry_date < today:
                     continue  # skip expired contracts
-                candidates[name].append((expiry_date, row["instrument_key"]))
+                candidates[name].append((expiry_date, row["instrument_key"], row["tradingsymbol"]))
 
         result = {}
         for symbol, contracts in candidates.items():
@@ -73,9 +73,9 @@ def _build_futures_instrument_map(base_symbols: list) -> dict:
                 logger.warning(f"No active futures contract found for {symbol}")
                 continue
             contracts.sort(key=lambda x: x[0])  # nearest expiry first
-            expiry, key = contracts[0]
-            result[symbol] = key
-            logger.info(f"Futures key resolved: {symbol} → {key} (expiry {expiry})")
+            expiry, key, tradingsymbol = contracts[0]
+            result[symbol] = {"instrument_key": key, "tradingsymbol": tradingsymbol}
+            logger.info(f"Futures key resolved: {symbol} → {key} ({tradingsymbol}, expiry {expiry})")
 
         return result
     except Exception as e:
@@ -133,7 +133,16 @@ class UpstoxClient:
         if not STUB_MODE:
             if self._instrument_map_date != date.today():
                 self._refresh_instrument_map()
-        return self._instrument_map.get(symbol, f"NSE_FO|{symbol}")
+        entry = self._instrument_map.get(symbol)
+        return entry["instrument_key"] if entry else f"NSE_FO|{symbol}"
+
+    def get_contract_name(self, symbol: str) -> str:
+        """Return the tradingsymbol for a base symbol e.g. NIFTY26MAYFUT."""
+        if not STUB_MODE:
+            if self._instrument_map_date != date.today():
+                self._refresh_instrument_map()
+        entry = self._instrument_map.get(symbol)
+        return entry["tradingsymbol"] if entry else symbol
 
     def reload_token(self, access_token: str):
         """Called after /callback saves a new token."""

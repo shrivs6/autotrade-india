@@ -5,7 +5,7 @@ NSE_SEGMENT = "NSE_FO"
 
 # Lot sizes per futures instrument (SEBI-mandated contract sizes)
 LOT_SIZES = {
-    "NIFTY": 75,
+    "NIFTY": 65,
     "BANKNIFTY": 30,
 }
 
