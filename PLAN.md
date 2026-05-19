@@ -24,14 +24,26 @@ Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index
 **Why:** Higher liquidity, fewer instruments to scan, multiple intraday re-entries on same instrument.
 
 **What changed:**
-- `constants.py`: `NIFTY50_SYMBOLS = ["NIFTY", "BANKNIFTY"]`, `NSE_SEGMENT = "NSE_FO"`, added `LOT_SIZES = {"NIFTY": 75, "BANKNIFTY": 30}`
-- `upstox_client.py`: Near-month futures contract resolved dynamically from `complete.csv.gz` (FUTIDX type, NSE_FO exchange). Refreshes daily. Daily interval for futures is `"day"` not `"1day"`.
-- `risk_manager.py`: Lot-based MIS sizing at 15% margin. `MAX_POSITION_EXPOSURE = ₹3,00,000` (sized for 1 NIFTY lot).
-- `scheduler.py`: Square-off moved from 3:20 PM → **3:00 PM** (Upstox stops serving quotes around 3:15 PM).
-- DB cleared: trades, signal_features, trade_signals, ohlcv_5min all reset. Fresh start.
-- Backfilled: 6,450 × 5-min candles + 104 daily candles (Mar–May 2026, current contract only).
+- `constants.py`: `NIFTY50_SYMBOLS = ["NIFTY", "BANKNIFTY"]`, `NSE_SEGMENT = "NSE_FO"`, `LOT_SIZES = {"NIFTY": 65, "BANKNIFTY": 30}` (65 is SEBI-mandated, not 75)
+- `upstox_client.py`: Near-month futures contract resolved dynamically from `complete.csv.gz` (FUTIDX type, NSE_FO exchange). Stores both `instrument_key` and `tradingsymbol` per symbol. `get_contract_name()` returns e.g. `NIFTY26MAYFUT`. Refreshes daily.
+- `risk_manager.py`: Lot-based MIS sizing at 15% margin. `MAX_POSITION_EXPOSURE = ₹3,00,000`.
+- `scheduler.py`: Square-off moved from 3:20 PM → **3:00 PM** (Upstox stops serving quotes ~3:15 PM).
+- `order_manager.py`: Resolves and stores full contract name on trade open. Square-off uses last OHLCV candle close as fallback if fetch_ltp fails (never falls back to entry price).
+- `models.py`: Added `contract` column to `Trade` table (stores e.g. `NIFTY26MAYFUT`). ALTER TABLE run on Neon.
+- `main.py`: On startup, restores open positions from DB into in-memory tracker so stop/target monitoring survives Railway container restarts.
+- `health.py`: Expanded `/health` endpoint checks DB, Upstox token, instrument key loading, and tracker/DB position sync. Hit this every morning before 9:30 AM.
+- DB cleared: ohlcv_5min, signal_features, trade_signals, old equity trades all removed. Fresh start.
+- Backfilled: 6,450 × 5-min candles + 104 daily candles (Mar–May 2026). Signal features: 504 rows (252 per symbol).
 
-**Futures data limitation:** Each futures contract only carries ~2 months of history (from when it starts trading). Data will accumulate organically each trading day.
+**Futures data limitation:** Each futures contract only carries ~2 months of history. Data accumulates organically each trading day.
+
+### Daily Morning Checklist (before 9:30 AM)
+1. Visit `https://web-production-0db02.up.railway.app/auth/login` to refresh Upstox token
+2. Hit `/health` — all checks must show `"ok": true` before market opens
+3. If `instrument_keys` check fails → container restart may fix it (token reload triggers map refresh)
+
+### Known Issues (open)
+- `fetch_ltp` fails at 3 PM despite valid morning token (STUB_MODE=False). Root cause likely: instrument key not in map → dumb fallback key `NSE_FO|NIFTY` rejected by API. Mitigation: square-off now uses last OHLCV candle price as fallback. Check `/health` → `instrument_keys` tomorrow morning to confirm.
 
 ### Known Fixes Applied
 - `upstox-python-sdk` pinned to `2.26.0` (v2.8.0 no longer exists on PyPI)
@@ -43,7 +55,8 @@ Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index
   - Daily candle interval for NSE_FO must be `"day"` not `"1day"`
   - 1-minute data limited to 30 days per request — chunk size 30 days
 - OAuth token stored in `upstox_token` DB table (Railway filesystem is ephemeral, files reset on redeploy)
-- Daily token refresh: visit `https://web-production-0db02.up.railway.app/auth/login` each morning before 9:15am
+- NIFTY lot size is **65** (SEBI revised from 75 in late 2024) — verify at contract rollover
+- In-memory PositionTracker resets on container restart → fixed by restoring from DB at startup
 
 ---
 
