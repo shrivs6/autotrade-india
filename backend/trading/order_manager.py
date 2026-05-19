@@ -221,15 +221,37 @@ def square_off_all():
     logger.info(f"Square off: closing {len(open_trades)} open position(s)")
 
     from backend.data.upstox_client import get_upstox_client
+    from backend.database.models import OHLCV5Min
     client = get_upstox_client()
 
     for trade in open_trades:
+        ltp = None
         try:
             ltp = client.fetch_ltp(trade.symbol)
         except Exception as e:
-            logger.warning(
-                f"fetch_ltp failed for {trade.symbol}: {e} — "
-                f"squaring off at entry price ₹{trade.entry_price}"
-            )
-            ltp = trade.entry_price  # fallback: close at entry (0 PnL)
+            logger.warning(f"fetch_ltp failed for {trade.symbol}: {e} — trying last candle price")
+
+        if ltp is None:
+            # Fallback: use last known candle close from DB (~2:55 PM price)
+            try:
+                db2 = SessionLocal()
+                try:
+                    last = (
+                        db2.query(OHLCV5Min)
+                        .filter(OHLCV5Min.symbol == trade.symbol)
+                        .order_by(OHLCV5Min.timestamp.desc())
+                        .first()
+                    )
+                    if last:
+                        ltp = last.close
+                        logger.info(f"{trade.symbol}: using last candle price ₹{ltp} for square-off")
+                finally:
+                    db2.close()
+            except Exception as e2:
+                logger.warning(f"Last candle lookup failed for {trade.symbol}: {e2}")
+
+        if ltp is None:
+            ltp = trade.entry_price
+            logger.warning(f"{trade.symbol}: no price available — squaring off at entry price ₹{ltp}")
+
         close_trade(trade.id, ltp, "eod_squareoff")

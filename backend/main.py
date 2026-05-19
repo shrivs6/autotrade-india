@@ -16,6 +16,36 @@ logger = get_logger(__name__)
 scheduler = create_scheduler()
 
 
+def _restore_open_positions():
+    """On startup, reload any open positions from DB into the in-memory tracker.
+    This prevents monitor_positions from skipping stop/target checks after a container restart."""
+    try:
+        from backend.database.connection import SessionLocal
+        from backend.database.models import Trade
+        from backend.trading.position_tracker import get_position_tracker
+        db = SessionLocal()
+        try:
+            open_trades = db.query(Trade).filter(Trade.status == "open").all()
+        finally:
+            db.close()
+        if not open_trades:
+            return
+        tracker = get_position_tracker()
+        for t in open_trades:
+            tracker.add(
+                trade_id=t.id,
+                symbol=t.symbol,
+                direction=t.direction,
+                entry_price=t.entry_price,
+                stop_loss=t.stop_loss,
+                target=t.target,
+                quantity=t.quantity,
+            )
+        logger.info(f"Startup: restored {len(open_trades)} open position(s) into tracker")
+    except Exception as e:
+        logger.error(f"Startup position restore failed: {e}")
+
+
 def _startup_square_off():
     """If server restarts after 3:20pm on a weekday, close any positions that were missed."""
     from datetime import datetime
@@ -48,6 +78,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting AutoTrade India backend...")
     Base.metadata.create_all(bind=engine, checkfirst=True)
     logger.info("DB tables verified.")
+    _restore_open_positions()
     _startup_square_off()
     scheduler.start()
     logger.info("Scheduler started. Jobs registered:")

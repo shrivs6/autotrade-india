@@ -27,7 +27,7 @@ export default function OpenPositions({ positions }) {
           <tbody>
             {positions.map((p) => (
               <tr key={p.id}>
-                <td className="symbol">{p.symbol}</td>
+                <td className="symbol">{p.contract || p.symbol}</td>
                 <td>
                   <span className={`badge ${p.direction}`}>
                     {p.direction?.toUpperCase()}
@@ -52,7 +52,7 @@ export default function OpenPositions({ positions }) {
           <div key={p.id} className="trade-card open-card">
             <div className="trade-card-header">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="trade-card-symbol">{p.symbol}</span>
+                <span className="trade-card-symbol">{p.contract || p.symbol}</span>
                 <span className={`badge ${p.direction}`}>{p.direction?.toUpperCase()}</span>
               </div>
               <span className="open-badge">OPEN</span>
@@ -71,7 +71,7 @@ export default function OpenPositions({ positions }) {
             </div>
             <div className="trade-card-row">
               <span>Qty / Exposure</span>
-              <span>{p.quantity ?? "—"} shares · ₹{p.exposure?.toLocaleString("en-IN")}</span>
+              <span>{p.quantity ?? "—"} lots · ₹{p.exposure?.toLocaleString("en-IN")}</span>
             </div>
             {p.confidence != null && (
               <div className="trade-card-row">
