@@ -42,8 +42,18 @@ Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index
 2. Hit `/health` — all checks must show `"ok": true` before market opens
 3. If `instrument_keys` check fails → container restart may fix it (token reload triggers map refresh)
 
-### Known Issues (open)
-- `fetch_ltp` fails at 3 PM despite valid morning token (STUB_MODE=False). Root cause likely: instrument key not in map → dumb fallback key `NSE_FO|NIFTY` rejected by API. Mitigation: square-off now uses last OHLCV candle price as fallback. Check `/health` → `instrument_keys` tomorrow morning to confirm.
+### Known Issues (resolved)
+- ~~`fetch_ltp` fails at 3 PM~~ — confirmed resolved 2026-05-20. `/health` shows instrument keys loading correctly (`NIFTY26MAYFUT`, `BANKNIFTY26MAYFUT`). Was likely a startup race condition before token loaded.
+
+### Parameter Changes for Futures
+| Parameter | Old (equity) | New (futures) | Reason |
+|-----------|-------------|---------------|--------|
+| `MAX_POSITION_EXPOSURE` | ₹1,00,000 | ₹3,00,000 | 1 NIFTY lot MIS margin |
+| `DAILY_LOSS_LIMIT` | -₹5,000 | -₹50,000 | Each futures stop = ~₹7-8k. Old limit halted after 1st loss. |
+| `STOP_LOSS_PCT` | 0.5% | 0.5% | Unchanged |
+| `TARGET_PCT` | 0.75% | 0.75% | Unchanged |
+
+> **Note:** When moving to real money, tighten `DAILY_LOSS_LIMIT` back to ~-₹20,000 (2-3 stops max).
 
 ### Known Fixes Applied
 - `upstox-python-sdk` pinned to `2.26.0` (v2.8.0 no longer exists on PyPI)
