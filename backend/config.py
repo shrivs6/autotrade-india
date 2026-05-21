@@ -19,7 +19,7 @@ ALERT_EMAIL_PASSWORD = os.getenv("ALERT_EMAIL_PASSWORD", "")
 MAX_POSITION_EXPOSURE = 300000   # ₹3,00,000 capital per trade (sized for 1 NIFTY lot MIS margin)
 INTRADAY_MARGIN_MULTIPLIER = 5   # 5x MIS margin (SEBI standard for intraday)
 MAX_CONCURRENT_POSITIONS = 3
-DAILY_LOSS_LIMIT = -5000         # halt trading if PnL drops below this
+DAILY_LOSS_LIMIT = -50000        # halt trading if PnL drops below this (paper trading — sized for futures exposure ~₹8k/stop)
 STOP_LOSS_PCT = 0.005            # 0.5%
 TARGET_PCT = 0.0075              # 0.75%
 
