@@ -78,14 +78,14 @@ def job_scan_and_trade():
     if now.hour >= 15:
         return
 
-    logger.info(f"=== [{now.strftime('%H:%M')}] Scanning {50} stocks ===")
-
     try:
         from backend.features.feature_builder import build_features
         from backend.trading.signal_evaluator import evaluate_and_log
         from backend.trading.order_manager import open_trade, monitor_positions
         from backend.data.upstox_client import get_upstox_client
         from backend.utils.constants import NIFTY50_SYMBOLS
+
+        logger.info(f"=== [{now.strftime('%H:%M')}] Scanning {len(NIFTY50_SYMBOLS)} instruments ===")
 
         # Fetch today's live candles so feature builder has fresh data
         from backend.data.historical_fetcher import refresh_todays_candles
