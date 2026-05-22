@@ -10,6 +10,7 @@ from backend.api.routes.trades import router as trades_router
 from backend.api.routes.performance import router as performance_router
 from backend.api.routes.history import router as history_router
 from backend.api.routes.auth import router as auth_router
+from backend.api.routes.admin import router as admin_router
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -105,6 +106,7 @@ app.include_router(trades_router)
 app.include_router(performance_router)
 app.include_router(history_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
 
 # Root-level /callback so Upstox redirect URI matches
 from backend.api.routes.auth import callback as _auth_callback

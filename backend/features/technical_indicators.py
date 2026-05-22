@@ -63,6 +63,8 @@ def add_volume_spike(df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
     """
     avg_volume = df["volume"].rolling(window=period).mean()
     df["volume_spike"] = df["volume"] / avg_volume
+    # If volume is 0 or missing (e.g. index instruments), fall back to neutral 1.0
+    df["volume_spike"] = df["volume_spike"].replace([float("inf"), float("-inf")], 1.0).fillna(1.0)
     return df
 
 
