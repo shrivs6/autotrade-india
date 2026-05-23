@@ -12,8 +12,9 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Only use last 3 months of data for nightly retrain to keep memory usage low
-RETRAIN_MONTHS_BACK = 3
+# Use last 12 months so the model trains on all available backfilled history.
+# Memory impact is negligible — NIFTY+BANKNIFTY produce ~10k rows/year, well within Railway limits.
+RETRAIN_MONTHS_BACK = 12
 
 
 def run_incremental_retrain():
@@ -26,7 +27,6 @@ def run_incremental_retrain():
     start = datetime.now()
 
     try:
-        # Build dataset limited to last 3 months to avoid OOM
         logger.info(f"Building dataset (last {RETRAIN_MONTHS_BACK} months)...")
         df = build_dataset(months_back=RETRAIN_MONTHS_BACK)
 
