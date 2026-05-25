@@ -105,11 +105,11 @@ def job_scan_and_trade():
 
                 # Phase 5: use ML evaluator instead of rule engine
                 from backend.trading.ml_signal_evaluator import evaluate_ml
-                direction, signal_id = evaluate_ml(features)
+                direction, signal_id, confidence = evaluate_ml(features)
 
                 if direction:
                     signals_found += 1
-                    open_trade(features, direction, signal_id)
+                    open_trade(features, direction, signal_id, confidence)
 
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {e}")

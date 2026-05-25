@@ -36,16 +36,16 @@ def reload_model():
     logger.info("ML signal evaluator: production model reloaded")
 
 
-def evaluate_ml(features: dict, db=None) -> tuple[str | None, int | None]:
+def evaluate_ml(features: dict, db=None) -> tuple[str | None, int | None, float | None]:
     """
     Scores features with the ML model for both long and short directions.
     Takes the higher-confidence direction if it exceeds CONFIDENCE_THRESHOLD.
-    Returns (direction, signal_id) or (None, None).
+    Returns (direction, signal_id, confidence) or (None, None, None).
     """
     model = get_model()
     if model is None:
         logger.warning("No production model — falling back to no signal")
-        return None, None
+        return None, None, None
 
     feature_cols = [c for c in FEATURE_COLS if c != "direction"]
 
@@ -106,4 +106,4 @@ def evaluate_ml(features: dict, db=None) -> tuple[str | None, int | None]:
         if close_db:
             db.close()
 
-    return best_direction, signal_id
+    return best_direction, signal_id, best_confidence if best_direction else None

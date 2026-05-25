@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 
 
-def open_trade(features: dict, direction: str, signal_id: int | None = None) -> bool:
+def open_trade(features: dict, direction: str, signal_id: int | None = None, confidence: float | None = None) -> bool:
     """
     Attempts to open a new trade.
     Returns True if trade was placed, False if rejected.
@@ -85,6 +85,7 @@ def open_trade(features: dict, direction: str, signal_id: int | None = None) -> 
             entry_time=datetime.now(IST),
             trading_mode="paper",
             status="open",
+            signal_confidence=float(confidence) if confidence is not None else None,
         )
         db.add(trade)
         db.flush()  # get trade.id before commit

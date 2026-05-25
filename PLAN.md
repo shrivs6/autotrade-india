@@ -44,6 +44,8 @@ Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index
 
 ### Known Issues (resolved)
 - ~~`fetch_ltp` fails at 3 PM~~ — confirmed resolved 2026-05-20. `/health` shows instrument keys loading correctly (`NIFTY26MAYFUT`, `BANKNIFTY26MAYFUT`). Was likely a startup race condition before token loaded.
+- ~~Confidence blank on open trades dashboard~~ — `ml_signal_evaluator.evaluate_ml()` now returns a 3-tuple `(direction, signal_id, confidence)`. `order_manager.open_trade()` accepts `confidence` kwarg and stores it as `Trade.signal_confidence`. Scheduler unpacks and passes confidence. (2026-05-25)
+- ~~Nightly retrain not learning from today's candles~~ — `run_incremental_retrain()` now calls `_update_signal_features()` before `build_dataset()`. This converts any new `ohlcv_5min` rows to `signal_features` rows (ON CONFLICT DO NOTHING) so each day's live candles are included in the next night's retrain without manual backfill triggers. (2026-05-25)
 
 ### Parameter Changes for Futures
 | Parameter | Old (equity) | New (futures) | Reason |
