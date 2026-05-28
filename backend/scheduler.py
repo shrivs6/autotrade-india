@@ -13,6 +13,11 @@ IST = pytz.timezone("Asia/Kolkata")
 
 def job_morning_data():
     """8:30 AM — fetch overnight data, compute and save morning bias."""
+    from datetime import datetime
+    from backend.utils.constants import is_market_holiday
+    if is_market_holiday(datetime.now(IST).date()):
+        logger.info("=== [8:30 AM] NSE holiday — skipping morning data ===")
+        return
     logger.info("=== [8:30 AM] Fetching morning data ===")
     try:
         from backend.data.nse_client import fetch_vix, fetch_fii_data
@@ -70,7 +75,12 @@ def job_confirm_bias():
 def job_scan_and_trade():
     """9:30 AM–2:55 PM every 5 min — scan all stocks and place trades."""
     from datetime import datetime
+    from backend.utils.constants import is_market_holiday
     now = datetime.now(IST)
+
+    # Skip NSE trading holidays
+    if is_market_holiday(now.date()):
+        return
 
     # Only trade during market hours — no new entries at or after 3:00 PM (square-off time)
     if now.hour < 9 or (now.hour == 9 and now.minute < 30):
@@ -125,6 +135,11 @@ def job_scan_and_trade():
 
 def job_square_off():
     """3:00 PM — force close all open positions."""
+    from datetime import datetime
+    from backend.utils.constants import is_market_holiday
+    if is_market_holiday(datetime.now(IST).date()):
+        logger.info("=== [3:00 PM] NSE holiday — skipping square-off ===")
+        return
     logger.info("=== [3:00 PM] Squaring off all open positions ===")
     try:
         from backend.trading.order_manager import square_off_all
