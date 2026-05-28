@@ -15,7 +15,7 @@
 | Phase 2 — Feature Engineering | ✅ Done | 27-feature vector, signal_features table backfilled (716k rows) |
 | Phase 3 — Rule-Based Paper Trading | ✅ Done | Paper broker, risk manager, order manager, post-market review, lessons |
 | Phase 4 — ML Training + Backtesting | ✅ Done | XGBoost trained (v1_initial), walk-forward validated, backtester built |
-| Phase 5 — Live Paper Trading + Dashboard | 🔄 Active | Pivoted to NIFTY + BANKNIFTY futures (2026-05-16). Accumulating data, nightly retrains running. |
+| Phase 5 — Live Paper Trading + Dashboard | 🔄 Active | Pivoted to NIFTY + BANKNIFTY futures (2026-05-16). ~10 months of NSE_INDEX history backfilled. Nightly self-updating retrains running. AUC=0.5729 (v20260525). |
 | Phase 6 — Real Money + Claude Layer | ⏳ Blocked | Gate: 60%+ win rate for 30 consecutive days on NIFTY/BANKNIFTY data. |
 
 ### Instrument Pivot (2026-05-16)
@@ -33,17 +33,25 @@ Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index
 - `main.py`: On startup, restores open positions from DB into in-memory tracker so stop/target monitoring survives Railway container restarts.
 - `health.py`: Expanded `/health` endpoint checks DB, Upstox token, instrument key loading, and tracker/DB position sync. Hit this every morning before 9:30 AM.
 - DB cleared: ohlcv_5min, signal_features, trade_signals, old equity trades all removed. Fresh start.
-- Backfilled: 6,450 × 5-min candles + 104 daily candles (Mar–May 2026). Signal features: 504 rows (252 per symbol).
+- Backfilled: ~10 months of NSE_INDEX continuous history (Nifty 50 + Nifty Bank) via `backend/scripts/backfill_index_history.py`. Signal features: ~5,548 rows (2,776 NIFTY + 2,772 BANKNIFTY). Older chunks (>14 months) rejected by Upstox — handled gracefully.
+- `RETRAIN_MONTHS_BACK = 12` in `incremental_trainer.py` — uses full available history each night.
+- Admin endpoints added (`backend/api/routes/admin.py`): `POST /admin/backfill-history` and `GET /admin/backfill-status`, protected by `ADMIN_SECRET` env var.
 
 **Futures data limitation:** Each futures contract only carries ~2 months of history. Data accumulates organically each trading day.
+
+### Annual Maintenance
+- **Each December**: Update `NSE_HOLIDAYS_2026` in `backend/utils/constants.py` with next year's NSE holiday list. Source: nseindia.com/resources/exchange-communication-holidays
 
 ### Daily Morning Checklist (before 9:30 AM)
 1. Visit `https://web-production-0db02.up.railway.app/auth/login` to refresh Upstox token
 2. Hit `/health` — all checks must show `"ok": true` before market opens
 3. If `instrument_keys` check fails → container restart may fix it (token reload triggers map refresh)
 
+### Known Issues
+- **`fetch_ltp` errors at 3 PM square-off** — Upstox stops serving quotes ~3:15 PM so `fetch_ltp` raises an error at 3:00 PM. Fallback to last OHLCV candle close price works correctly. Not a crash — just noisy logs. Root cause unresolved; acceptable for paper trading.
+
 ### Known Issues (resolved)
-- ~~`fetch_ltp` fails at 3 PM~~ — confirmed resolved 2026-05-20. `/health` shows instrument keys loading correctly (`NIFTY26MAYFUT`, `BANKNIFTY26MAYFUT`). Was likely a startup race condition before token loaded.
+- ~~`fetch_ltp` startup race condition~~ — confirmed resolved 2026-05-20. Was a container startup race before token loaded, not the 3 PM quote issue above.
 - ~~Confidence blank on open trades dashboard~~ — `ml_signal_evaluator.evaluate_ml()` now returns a 3-tuple `(direction, signal_id, confidence)`. `order_manager.open_trade()` accepts `confidence` kwarg and stores it as `Trade.signal_confidence`. Scheduler unpacks and passes confidence. (2026-05-25)
 - ~~Nightly retrain not learning from today's candles~~ — `run_incremental_retrain()` now calls `_update_signal_features()` before `build_dataset()`. This converts any new `ohlcv_5min` rows to `signal_features` rows (ON CONFLICT DO NOTHING) so each day's live candles are included in the next night's retrain without manual backfill triggers. (2026-05-25)
 
