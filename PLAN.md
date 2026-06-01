@@ -58,12 +58,28 @@ Switched from 50 individual Nifty 50 equity stocks → **NIFTY + BANKNIFTY index
 ### Parameter Changes for Futures
 | Parameter | Old (equity) | New (futures) | Reason |
 |-----------|-------------|---------------|--------|
-| `MAX_POSITION_EXPOSURE` | ₹1,00,000 | ₹3,00,000 | 1 NIFTY lot MIS margin |
+| `MAX_POSITION_EXPOSURE` | ₹1,00,000 | ₹3,00,000 | Used for lot sizing calculation only |
 | `DAILY_LOSS_LIMIT` | -₹5,000 | -₹50,000 | Each futures stop = ~₹7-8k. Old limit halted after 1st loss. |
 | `STOP_LOSS_PCT` | 0.5% | 0.5% | Unchanged |
 | `TARGET_PCT` | 0.75% | 0.75% | Unchanged |
 
 > **Note:** When moving to real money, tighten `DAILY_LOSS_LIMIT` back to ~-₹20,000 (2-3 stops max).
+
+### Real Capital Requirements (corrected)
+Actual Upstox MIS margin for intraday futures (~11.5% of notional):
+
+| Instrument | Notional (1 lot) | MIS Margin |
+|------------|-----------------|------------|
+| NIFTY (65 lots × ₹24,000) | ₹15,60,000 | ~₹1,80,000 |
+| BANKNIFTY (30 lots × ₹55,000) | ₹16,50,000 | ~₹1,60,000 |
+| **Both together** | | **~₹3,40,000** |
+
+**Recommended account balance for live trading: ₹5,00,000**
+(₹3.4L margin + ₹1.6L buffer for losing days and drawdown)
+
+> **Prerequisites for live trading on Upstox:**
+> - F&O segment must be enabled (Profile → Account → Segments → Enable F&O)
+> - Takes ~24 hours to activate after request
 
 ### Known Fixes Applied
 - `upstox-python-sdk` pinned to `2.26.0` (v2.8.0 no longer exists on PyPI)

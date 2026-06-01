@@ -69,6 +69,61 @@ def health_check():
         checks["instrument_keys"] = {"ok": False, "error": str(e)}
         all_ok = False
 
+    # --- VIX (last known value + age) ---
+    try:
+        from backend.database.connection import SessionLocal
+        from backend.database.models import MarketContext
+        from datetime import date
+        db = SessionLocal()
+        try:
+            today_ctx = db.query(MarketContext).filter(
+                MarketContext.date == date.today()
+            ).first()
+        finally:
+            db.close()
+        if today_ctx and today_ctx.vix and today_ctx.vix > 0:
+            checks["vix"] = {"ok": True, "value": today_ctx.vix, "bias": round(today_ctx.morning_bias or 0, 3)}
+        else:
+            checks["vix"] = {
+                "ok": False,
+                "error": "VIX not fetched today — morning bias defaulting to 0, model features corrupted",
+            }
+            all_ok = False
+    except Exception as e:
+        checks["vix"] = {"ok": False, "error": str(e)}
+        all_ok = False
+
+    # --- Candle freshness ---
+    try:
+        from backend.database.connection import SessionLocal
+        from backend.database.models import OHLCV5Min
+        from backend.utils.constants import NIFTY50_SYMBOLS
+        from datetime import datetime, timezone
+        db = SessionLocal()
+        try:
+            stale = []
+            for sym in NIFTY50_SYMBOLS:
+                last = db.query(OHLCV5Min).filter(
+                    OHLCV5Min.symbol == sym
+                ).order_by(OHLCV5Min.timestamp.desc()).first()
+                if last:
+                    age_min = (datetime.now(timezone.utc) - last.timestamp.replace(tzinfo=timezone.utc)).seconds // 60
+                    if age_min > 15:
+                        stale.append(f"{sym} ({age_min}m old)")
+        finally:
+            db.close()
+        if stale:
+            checks["candles"] = {
+                "ok": False,
+                "error": f"Stale candles: {stale} — features may be built on old data",
+            }
+            all_ok = False
+        else:
+            checks["candles"] = {"ok": True}
+    except Exception as e:
+        checks["candles"] = {"ok": False, "error": str(e)}
+        all_ok = False
+
     # --- Open positions ---
     try:
         from backend.database.connection import SessionLocal
