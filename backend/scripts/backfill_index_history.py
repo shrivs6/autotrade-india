@@ -63,6 +63,11 @@ def _fetch_index_chunk(
         columns=["timestamp", "open", "high", "low", "close", "volume", "oi"],
     )
     df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # Upstox returns timezone-aware IST timestamps. PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+    # causes SQLAlchemy to convert them to UTC on insert (9:30 IST → 4:00 UTC), which breaks
+    # the trading-hour filter (9:30–14:00 IST). Strip to naive IST before resample.
+    if not df.empty and df["timestamp"].dt.tz is not None:
+        df["timestamp"] = df["timestamp"].dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
     df = df[["timestamp", "open", "high", "low", "close", "volume"]].sort_values("timestamp")
 
     # Resample 1-min → 5-min

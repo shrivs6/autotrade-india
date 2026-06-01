@@ -27,4 +27,3 @@ TARGET_PCT = 0.0075              # 0.75%
 MARKET_OPEN = "09:15"
 TRADING_START = "09:30"
 TRADING_END = "14:00"            # no new entries after 2pm
-SQUARE_OFF_TIME = "15:20"        # force close all positions
