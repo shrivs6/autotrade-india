@@ -81,8 +81,12 @@ def health_check():
             ).first()
         finally:
             db.close()
+        from datetime import datetime, time as dtime
+        past_trading_start = datetime.now(IST).time() >= dtime(9, 30)
         if today_ctx and today_ctx.vix and today_ctx.vix > 0:
             checks["vix"] = {"ok": True, "value": today_ctx.vix, "bias": round(today_ctx.morning_bias or 0, 3)}
+        elif not past_trading_start:
+            checks["vix"] = {"ok": True, "note": "Pre-market — VIX will be fetched at 9:00 AM"}
         else:
             checks["vix"] = {
                 "ok": False,
@@ -93,33 +97,40 @@ def health_check():
         checks["vix"] = {"ok": False, "error": str(e)}
         all_ok = False
 
-    # --- Candle freshness ---
+    # --- Candle freshness (only meaningful during market hours) ---
     try:
         from backend.database.connection import SessionLocal
         from backend.database.models import OHLCV5Min
         from backend.utils.constants import NIFTY50_SYMBOLS
-        from datetime import datetime, timezone
-        db = SessionLocal()
-        try:
-            stale = []
-            for sym in NIFTY50_SYMBOLS:
-                last = db.query(OHLCV5Min).filter(
-                    OHLCV5Min.symbol == sym
-                ).order_by(OHLCV5Min.timestamp.desc()).first()
-                if last:
-                    age_min = (datetime.now(timezone.utc) - last.timestamp.replace(tzinfo=timezone.utc)).seconds // 60
-                    if age_min > 15:
-                        stale.append(f"{sym} ({age_min}m old)")
-        finally:
-            db.close()
-        if stale:
-            checks["candles"] = {
-                "ok": False,
-                "error": f"Stale candles: {stale} — features may be built on old data",
-            }
-            all_ok = False
+        from datetime import datetime, timezone, time as dtime
+        now_ist = datetime.now(IST)
+        market_open = dtime(9, 15)
+        market_close = dtime(15, 30)
+        during_market = market_open <= now_ist.time() <= market_close
+        if not during_market:
+            checks["candles"] = {"ok": True, "note": "Market closed — candle freshness not checked"}
         else:
-            checks["candles"] = {"ok": True}
+            db = SessionLocal()
+            try:
+                stale = []
+                for sym in NIFTY50_SYMBOLS:
+                    last = db.query(OHLCV5Min).filter(
+                        OHLCV5Min.symbol == sym
+                    ).order_by(OHLCV5Min.timestamp.desc()).first()
+                    if last:
+                        age_min = (datetime.now(timezone.utc) - last.timestamp.replace(tzinfo=timezone.utc)).seconds // 60
+                        if age_min > 15:
+                            stale.append(f"{sym} ({age_min}m old)")
+            finally:
+                db.close()
+            if stale:
+                checks["candles"] = {
+                    "ok": False,
+                    "error": f"Stale candles: {stale} — features may be built on old data",
+                }
+                all_ok = False
+            else:
+                checks["candles"] = {"ok": True}
     except Exception as e:
         checks["candles"] = {"ok": False, "error": str(e)}
         all_ok = False
