@@ -11,3 +11,7 @@ frontend/build/
 *.log
 node_modules/
 frontend/dist/
+
+# Planning and documentation files (local only)
+*.md
+!README.md
