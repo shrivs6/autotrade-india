@@ -179,6 +179,7 @@ def refresh_todays_candles():
         logger.info(f"Live candle refresh: {total} new candles upserted, {len(failed)} failed")
         if failed:
             logger.warning(f"Failed symbols: {failed}")
+        return len(failed)
     finally:
         db.close()
 

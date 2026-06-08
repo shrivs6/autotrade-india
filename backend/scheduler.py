@@ -127,7 +127,13 @@ def job_scan_and_trade():
 
         # Fetch today's live candles so feature builder has fresh data
         from backend.data.historical_fetcher import refresh_todays_candles
-        refresh_todays_candles()
+        failed_count = refresh_todays_candles()
+
+        # If all symbols failed (no token / API down), skip new entries entirely.
+        # Still monitor existing open positions using last known prices.
+        skip_new_entries = (failed_count >= len(NIFTY50_SYMBOLS))
+        if skip_new_entries:
+            logger.warning(f"[{now.strftime('%H:%M')}] Candle refresh failed for all symbols — skipping new entries to avoid stale-price trades")
 
         client = get_upstox_client()
         current_prices = {}
@@ -145,7 +151,7 @@ def job_scan_and_trade():
                 from backend.trading.ml_signal_evaluator import evaluate_ml
                 direction, signal_id, confidence = evaluate_ml(features)
 
-                if direction:
+                if direction and not skip_new_entries:
                     signals_found += 1
                     open_trade(features, direction, signal_id, confidence)
 
