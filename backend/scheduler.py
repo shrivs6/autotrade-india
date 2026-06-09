@@ -58,7 +58,7 @@ def job_morning_data():
 
 
 def job_retry_vix():
-    """9:00 AM — retry VIX fetch if 8:30 AM attempt failed (NSE unreliable pre-market)."""
+    """9:15 AM — retry VIX fetch if 8:30 AM attempt failed (NSE unreliable pre-market)."""
     from datetime import datetime
     from backend.utils.constants import is_market_holiday
     if is_market_holiday(datetime.now(IST).date()):
@@ -69,25 +69,25 @@ def job_retry_vix():
         ctx = get_today_context()
         vix_ok = ctx and ctx.get("vix") and ctx.get("vix") != 15.0
         if vix_ok:
-            logger.info("[9:00 AM] VIX already fetched successfully — skipping retry")
+            logger.info("[9:15 AM] VIX already fetched successfully — skipping retry")
             return
-        logger.info("[9:00 AM] VIX missing or defaulted — retrying NSE fetch...")
+        logger.info("[9:15 AM] VIX missing or defaulted — retrying NSE fetch...")
         vix = fetch_vix()
         if vix:
             fii = fetch_fii_data()
             fii_net = fii["fii_net_crores"] if fii else (ctx.get("fii_net_crores", 0.0) if ctx else 0.0)
             prev_return = ctx.get("prev_day_return", 0.0) if ctx else 0.0
             save_morning_context(vix, fii_net, prev_return)
-            logger.info(f"[9:00 AM] VIX retry succeeded: VIX={vix}")
+            logger.info(f"[9:15 AM] VIX retry succeeded: VIX={vix}")
         else:
-            logger.warning("[9:00 AM] VIX retry failed — model will use default VIX=15.0 today")
+            logger.warning("[9:15 AM] VIX retry failed — model will use default VIX=15.0 today")
     except Exception as e:
         logger.error(f"VIX retry job failed: {e}")
 
 
 def job_confirm_bias():
-    """9:15 AM — log bias confirmation (Nifty open vs prev close)."""
-    logger.info("=== [9:15 AM] Confirming market bias ===")
+    """9:20 AM — log bias confirmation (Nifty open vs prev close)."""
+    logger.info("=== [9:20 AM] Confirming market bias ===")
     try:
         from backend.features.market_context_scorer import get_today_context
         ctx = get_today_context()
@@ -208,8 +208,8 @@ def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=IST)
 
     scheduler.add_job(job_morning_data, CronTrigger(hour=8, minute=30, timezone=IST), id="morning_data")
-    scheduler.add_job(job_retry_vix, CronTrigger(hour=9, minute=0, timezone=IST), id="retry_vix")
-    scheduler.add_job(job_confirm_bias, CronTrigger(hour=9, minute=15, timezone=IST), id="confirm_bias")
+    scheduler.add_job(job_retry_vix, CronTrigger(hour=9, minute=15, timezone=IST), id="retry_vix")
+    scheduler.add_job(job_confirm_bias, CronTrigger(hour=9, minute=20, timezone=IST), id="confirm_bias")
     scheduler.add_job(
         job_scan_and_trade,
         CronTrigger(hour="9-15", minute="*/5", day_of_week="mon-fri", timezone=IST),
