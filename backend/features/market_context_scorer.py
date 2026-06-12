@@ -96,19 +96,19 @@ def get_today_context(db=None) -> dict | None:
         if ctx is None:
             return None
         return {
-            "vix": ctx.vix or 15.0,
+            "vix": ctx.vix,  # None if both fetch attempts failed — callers must handle
             "fii_net_crores": ctx.fii_net_crores or 0.0,
             "fii_z_score": ctx.fii_z_score or 0.0,
             "morning_bias": ctx.morning_bias or 0.0,
-            "vix_high": int((ctx.vix or 15) > 20),
-            "vix_extreme": int((ctx.vix or 15) > 25),
+            "vix_high": int((ctx.vix or 0) > 20),
+            "vix_extreme": int((ctx.vix or 0) > 25),
         }
     finally:
         if close_db:
             db.close()
 
 
-def save_morning_context(vix: float, fii_net: float, prev_day_return: float, db=None):
+def save_morning_context(vix: float | None, fii_net: float, prev_day_return: float, db=None):
     """
     Called at 8:30 AM by the scheduler.
     Computes and saves today's market context to the DB.
@@ -120,7 +120,7 @@ def save_morning_context(vix: float, fii_net: float, prev_day_return: float, db=
 
     try:
         fii_z = compute_fii_zscore(fii_net, db)
-        bias = compute_morning_bias(vix, fii_z, prev_day_return)
+        bias = compute_morning_bias(vix, fii_z, prev_day_return) if vix is not None else None
 
         today = date.today()
         existing = db.query(MarketContext).filter(MarketContext.date == today).first()

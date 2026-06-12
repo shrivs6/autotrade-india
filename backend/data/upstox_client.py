@@ -185,6 +185,7 @@ class UpstoxClient:
                 to_date=to_date,
                 from_date=from_date,
                 api_version="2.0",
+                _request_timeout=10,
             )
             candles = response.data.candles
             df = pd.DataFrame(
@@ -230,6 +231,7 @@ class UpstoxClient:
                 instrument_key=instrument_key,
                 interval=api_interval,
                 api_version="2.0",
+                _request_timeout=10,
             )
             candles = response.data.candles
             if not candles:
@@ -273,11 +275,45 @@ class UpstoxClient:
             response = api.ltp(
                 symbol=instrument_key,
                 api_version="2.0",
+                _request_timeout=10,
             )
             return response.data[instrument_key].last_price
         except Exception as e:
             logger.error(f"Failed to fetch LTP for {symbol}: {e}")
             raise
+
+    def fetch_vix(self) -> float | None:
+        """Fetch India VIX from Upstox (NSE_INDEX segment). Returns None if unavailable."""
+        if STUB_MODE:
+            return 15.0
+
+        if not self.access_token:
+            return None
+
+        try:
+            import upstox_client
+            config = upstox_client.Configuration()
+            config.access_token = self.access_token
+            client = upstox_client.ApiClient(config)
+            api = upstox_client.MarketQuoteApi(client)
+            instrument_key = "NSE_INDEX|India VIX"
+            response = api.ltp(symbol=instrument_key, api_version="2.0", _request_timeout=10)
+            # SDK may return key in different format — search for VIX entry
+            entry = response.data.get(instrument_key)
+            if entry is None:
+                for k, v in response.data.items():
+                    if "vix" in k.lower():
+                        entry = v
+                        break
+            if entry is None:
+                logger.error(f"VIX key not found in Upstox response. Keys: {list(response.data.keys())}")
+                return None
+            vix = entry.last_price
+            logger.info(f"India VIX (Upstox): {vix}")
+            return float(vix)
+        except Exception as e:
+            logger.error(f"Upstox VIX fetch failed: {e}")
+            return None
 
     def _stub_historical(self, symbol, interval, from_date, to_date) -> pd.DataFrame:
         logger.warning(f"STUB MODE: returning fake data for {symbol} ({interval})")

@@ -27,7 +27,7 @@ def job_morning_data():
         from backend.database.models import OHLCVDaily
         from datetime import date, timedelta
 
-        vix = fetch_vix() or 15.0
+        vix = fetch_vix()  # may be None if NSE is unreliable pre-market — retry at 9:15 AM
         fii = fetch_fii_data()
         fii_net = fii["fii_net_crores"] if fii else 0.0
 
@@ -52,7 +52,7 @@ def job_morning_data():
         # Reset daily risk limits
         get_risk_manager().reset_daily()
 
-        logger.info(f"Morning data done: VIX={vix}, FII=₹{fii_net:.0f}cr")
+        logger.info(f"Morning data done: VIX={vix if vix is not None else 'N/A (fetch failed)'}, FII=₹{fii_net:.0f}cr")
     except Exception as e:
         logger.error(f"Morning data job failed: {e}")
 
@@ -71,16 +71,25 @@ def job_retry_vix():
         if vix_ok:
             logger.info("[9:15 AM] VIX already fetched successfully — skipping retry")
             return
-        logger.info("[9:15 AM] VIX missing or defaulted — retrying NSE fetch...")
+        logger.info("[9:15 AM] VIX missing — retrying NSE fetch...")
         vix = fetch_vix()
+
+        if not vix:
+            # NSE scraping unreliable from cloud IPs — fall back to Upstox LTP API
+            logger.warning("[9:15 AM] NSE failed — trying Upstox as VIX source...")
+            from backend.data.upstox_client import get_upstox_client
+            vix = get_upstox_client().fetch_vix()
+            if vix:
+                logger.info(f"[9:15 AM] VIX fetched via Upstox fallback: {vix}")
+
         if vix:
             fii = fetch_fii_data()
             fii_net = fii["fii_net_crores"] if fii else (ctx.get("fii_net_crores", 0.0) if ctx else 0.0)
             prev_return = ctx.get("prev_day_return", 0.0) if ctx else 0.0
             save_morning_context(vix, fii_net, prev_return)
-            logger.info(f"[9:15 AM] VIX retry succeeded: VIX={vix}")
+            logger.info(f"[9:15 AM] VIX confirmed: {vix}")
         else:
-            logger.warning("[9:15 AM] VIX retry failed — model will use default VIX=15.0 today")
+            logger.warning("[9:15 AM] VIX unavailable from both NSE and Upstox — new entries will be blocked today")
     except Exception as e:
         logger.error(f"VIX retry job failed: {e}")
 
@@ -135,6 +144,38 @@ def job_scan_and_trade():
         if skip_new_entries:
             logger.warning(f"[{now.strftime('%H:%M')}] Candle refresh failed for all symbols — skipping new entries to avoid stale-price trades")
 
+        # VIX halt — retry live fetch every scan until 12:30 PM if VIX is still missing.
+        # Model is weakest after 12:30 PM so no point entering trades without context that late.
+        from backend.features.market_context_scorer import get_today_context, save_morning_context
+        ctx = get_today_context()
+        if ctx is None or ctx.get("vix") is None:
+            if now.hour < 12 or (now.hour == 12 and now.minute <= 30):
+                # Still within retry window — attempt live fetch (NSE → Upstox fallback)
+                from backend.data.nse_client import fetch_vix, fetch_fii_data
+                from backend.data.upstox_client import get_upstox_client
+                vix = fetch_vix()
+                source = "NSE"
+                if not vix:
+                    vix = get_upstox_client().fetch_vix()
+                    source = "Upstox"
+                if vix:
+                    fii = fetch_fii_data()
+                    fii_net = fii["fii_net_crores"] if fii else (ctx.get("fii_net_crores", 0.0) if ctx else 0.0)
+                    prev_return = ctx.get("prev_day_return", 0.0) if ctx else 0.0
+                    save_morning_context(vix, fii_net, prev_return)
+                    ctx = get_today_context()
+                    logger.info(f"[{now.strftime('%H:%M')}] VIX fetched via {source}: {vix} — trading unblocked")
+                else:
+                    if not skip_new_entries:
+                        logger.warning(f"[{now.strftime('%H:%M')}] VIX unavailable — skipping entries, will retry next scan")
+                    skip_new_entries = True
+            else:
+                if not skip_new_entries:
+                    logger.warning(f"[{now.strftime('%H:%M')}] VIX still unavailable after 12:30 PM — blocking rest of day")
+                skip_new_entries = True
+
+        morning_bias = ctx.get("morning_bias") if ctx else None
+
         client = get_upstox_client()
         current_prices = {}
         signals_found = 0
@@ -150,6 +191,21 @@ def job_scan_and_trade():
                 # Phase 5: use ML evaluator instead of rule engine
                 from backend.trading.ml_signal_evaluator import evaluate_ml
                 direction, signal_id, confidence = evaluate_ml(features)
+
+                if direction and not skip_new_entries:
+                    # Bias direction filter — avoid trading against confirmed market direction.
+                    # On NEUTRAL days (|bias| <= 0.15), require higher confidence since we lack
+                    # directional conviction.
+                    bias = morning_bias or 0.0
+                    if bias > 0.15 and direction == "short":
+                        logger.info(f"{symbol}: skipping SHORT — bullish bias ({bias:.2f})")
+                        direction = None
+                    elif bias < -0.15 and direction == "long":
+                        logger.info(f"{symbol}: skipping LONG — bearish bias ({bias:.2f})")
+                        direction = None
+                    elif abs(bias) <= 0.15 and confidence < 0.65:
+                        logger.info(f"{symbol}: skipping {direction.upper()} — NEUTRAL bias, confidence {confidence:.2f} < 0.65")
+                        direction = None
 
                 if direction and not skip_new_entries:
                     signals_found += 1
