@@ -101,8 +101,11 @@ def job_confirm_bias():
         from backend.features.market_context_scorer import get_today_context
         ctx = get_today_context()
         if ctx:
-            bias = ctx.get("morning_bias", 0)
-            vix = ctx.get("vix", 0)
+            bias = ctx.get("morning_bias")
+            vix = ctx.get("vix")
+            if bias is None or vix is None:
+                logger.warning(f"Bias confirmation skipped — VIX unavailable (vix={vix}, bias={bias})")
+                return
             direction = "BULLISH" if bias > 0.1 else "BEARISH" if bias < -0.1 else "NEUTRAL"
             logger.info(f"Bias confirmed: {direction} (score={bias:.2f}, VIX={vix:.1f})")
     except Exception as e:
