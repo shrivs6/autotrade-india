@@ -124,40 +124,61 @@ def open_trade(features: dict, direction: str, signal_id: int | None = None, con
         db.close()
 
 
-def monitor_positions(current_prices: dict[str, float]):
+def monitor_positions(current_prices: dict[str, float],
+                      candle_highs: dict[str, float] | None = None,
+                      candle_lows: dict[str, float] | None = None):
     """
     Called every 5 minutes. Checks if any open position has hit stop loss or target.
-    current_prices: { 'RELIANCE': 2450.5, 'TCS': 3200.0, ... }
+
+    Uses candle high/low to detect intraday touches — matching how the model was trained.
+    Falls back to close price if high/low not available.
+
+    current_prices: { 'NIFTY': 24050.0, ... }  — used as exit price when SL/target triggered
+    candle_highs:   { 'NIFTY': 24120.0, ... }  — candle high for target detection (long) / SL (short)
+    candle_lows:    { 'NIFTY': 23980.0, ... }  — candle low for SL detection (long) / target (short)
     """
     tracker = get_position_tracker()
     risk = get_risk_manager()
 
+    candle_highs = candle_highs or {}
+    candle_lows = candle_lows or {}
+
     for position in tracker.get_all():
         symbol = position["symbol"]
-        price = current_prices.get(symbol)
+        close = current_prices.get(symbol)
 
-        if price is None:
+        if close is None:
             continue
 
         direction = position["direction"]
         stop_loss = position["stop_loss"]
         target = position["target"]
 
+        # Use candle high/low where available — matches training label logic.
+        # Fall back to close price if high/low missing.
+        high = candle_highs.get(symbol, close)
+        low = candle_lows.get(symbol, close)
+
         exit_reason = None
+        exit_price = close
 
         if direction == "long":
-            if price <= stop_loss:
+            if low <= stop_loss:
                 exit_reason = "stop_hit"
-            elif price >= target:
+                exit_price = stop_loss  # exit at SL level, not close
+            elif high >= target:
                 exit_reason = "target_hit"
+                exit_price = target  # exit at target level, not close
         else:  # short
-            if price >= stop_loss:
+            if high >= stop_loss:
                 exit_reason = "stop_hit"
-            elif price <= target:
+                exit_price = stop_loss
+            elif low <= target:
                 exit_reason = "target_hit"
+                exit_price = target
 
         if exit_reason:
-            close_trade(position["trade_id"], price, exit_reason)
+            close_trade(position["trade_id"], exit_price, exit_reason)
 
 
 def close_trade(trade_id: int, exit_price: float, exit_reason: str):

@@ -181,6 +181,8 @@ def job_scan_and_trade():
 
         client = get_upstox_client()
         current_prices = {}
+        candle_highs = {}
+        candle_lows = {}
         signals_found = 0
 
         for symbol in NIFTY50_SYMBOLS:
@@ -190,6 +192,8 @@ def job_scan_and_trade():
                     continue
 
                 current_prices[symbol] = features.get("close_price", 0)
+                candle_highs[symbol] = features.get("high_price") or features.get("close_price", 0)
+                candle_lows[symbol] = features.get("low_price") or features.get("close_price", 0)
 
                 # Phase 5: use ML evaluator instead of rule engine
                 from backend.trading.ml_signal_evaluator import evaluate_ml
@@ -217,8 +221,8 @@ def job_scan_and_trade():
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {e}")
 
-        # Check stop loss / target for open positions
-        monitor_positions(current_prices)
+        # Check stop loss / target for open positions using candle high/low
+        monitor_positions(current_prices, candle_highs, candle_lows)
 
         logger.info(f"Scan complete: {signals_found} signal(s) found")
 

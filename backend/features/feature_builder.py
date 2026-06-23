@@ -90,8 +90,10 @@ def extract_latest_features(df: pd.DataFrame) -> dict | None:
         "session_morning": row.get("session_morning"),
         "session_midday": row.get("session_midday"),
         "session_afternoon": row.get("session_afternoon"),
-        # Price (not a model feature — used for order sizing)
+        # Price (not a model feature — used for order sizing and candle high/low monitoring)
         "close_price": row.get("close"),
+        "high_price": row.get("high"),
+        "low_price": row.get("low"),
     }
 
     # Check for NaN in critical features
