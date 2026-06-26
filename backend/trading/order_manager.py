@@ -4,7 +4,7 @@ Order manager — controls the full lifecycle of a trade:
 
 Called by the scheduler every 5 minutes during trading hours.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from backend.database.connection import SessionLocal
 from backend.database.models import Trade, TradeSignal
@@ -17,6 +17,29 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
+
+# Per-symbol stop-loss cooldown: symbol → datetime until which re-entry is blocked.
+# Prevents re-entering the same symbol immediately after a stop-loss exit,
+# which caused a loss-ladder pattern in choppy/reversing markets.
+_stop_cooldowns: dict[str, datetime] = {}
+STOP_COOLDOWN_MINUTES = 60
+
+
+def _is_in_cooldown(symbol: str) -> bool:
+    """Returns True if the symbol is still within its post-stop-loss cooldown window."""
+    until = _stop_cooldowns.get(symbol)
+    if until is None:
+        return False
+    if datetime.now(IST) >= until:
+        _stop_cooldowns.pop(symbol, None)
+        return False
+    return True
+
+
+def _set_cooldown(symbol: str):
+    """Starts a 60-minute re-entry block for the symbol after a stop-loss."""
+    _stop_cooldowns[symbol] = datetime.now(IST) + timedelta(minutes=STOP_COOLDOWN_MINUTES)
+    logger.info(f"{symbol}: stop-loss cooldown set — no new entries for {STOP_COOLDOWN_MINUTES} min")
 
 
 def open_trade(features: dict, direction: str, signal_id: int | None = None, confidence: float | None = None) -> bool:
@@ -33,6 +56,12 @@ def open_trade(features: dict, direction: str, signal_id: int | None = None, con
 
     risk = get_risk_manager()
     tracker = get_position_tracker()
+
+    # Cooldown gate — block re-entry after a stop-loss for 60 minutes
+    if _is_in_cooldown(symbol):
+        until = _stop_cooldowns[symbol].strftime("%H:%M")
+        logger.info(f"{symbol}: trade rejected — in stop-loss cooldown until {until} IST")
+        return False
 
     # Risk gate — read open positions from DB so duplicate check survives server restarts
     db_check = SessionLocal()
@@ -217,6 +246,10 @@ def close_trade(trade_id: int, exit_price: float, exit_reason: str):
             f"TRADE CLOSED #{trade_id}: {symbol} | {exit_reason} | "
             f"₹{exit_price} | PnL: ₹{pnl:+,.0f} [{result}]"
         )
+
+        # After a stop-loss, block re-entry for 60 minutes to prevent loss-ladder whipsawing
+        if exit_reason == "stop_hit":
+            _set_cooldown(symbol)
 
     except Exception as e:
         logger.error(f"Failed to close trade {trade_id}: {e}")

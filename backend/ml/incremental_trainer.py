@@ -51,7 +51,7 @@ def _update_signal_features():
     from backend.database.connection import SessionLocal
     from backend.database.models import OHLCV5Min
     from backend.features.technical_indicators import compute_all_indicators
-    from backend.features.feature_store import bulk_save_features
+    from backend.features.feature_store import bulk_upsert_features
     from backend.utils.constants import NIFTY50_SYMBOLS
 
     TRADING_START = dtime(9, 30)
@@ -99,9 +99,9 @@ def _update_signal_features():
                     "features": features,
                 })
 
-            bulk_save_features(records, db=db)
+            bulk_upsert_features(records, db=db)
             total += len(records)
-            logger.info(f"Feature update: {symbol} — {len(records)} rows upserted")
+            logger.info(f"Feature update: {symbol} — {len(records)} rows upserted (VIX injected)")
     finally:
         db.close()
 
@@ -139,6 +139,11 @@ def run_incremental_retrain():
 
         # Promote only if AUC improves
         promoted = promote_if_better(version)
+
+        # Reload in-memory model so the next scan uses the new production model
+        if promoted:
+            from backend.trading.ml_signal_evaluator import reload_model
+            reload_model()
 
         elapsed = (datetime.now() - start).seconds
         logger.info(

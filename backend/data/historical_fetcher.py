@@ -169,6 +169,15 @@ def refresh_todays_candles():
         for symbol in NIFTY50_SYMBOLS:
             try:
                 df = client.fetch_intraday(symbol, "5minute")
+                if df.empty:
+                    # API returned 0 candles — expired token or API down.
+                    # An empty response does NOT raise an exception, so we must
+                    # check explicitly. Without this, failed_count stays 0 and
+                    # the scheduler's skip_new_entries guard never triggers,
+                    # allowing trades to open on stale yesterday's candles.
+                    logger.warning(f"refresh_todays_candles: {symbol} returned 0 candles — treating as failure (token expired?)")
+                    failed.append(symbol)
+                    continue
                 inserted = upsert_5min(db, df, symbol)
                 total += inserted
                 time.sleep(RATE_LIMIT_SLEEP)

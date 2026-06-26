@@ -118,7 +118,7 @@ def health_check():
                         OHLCV5Min.symbol == sym
                     ).order_by(OHLCV5Min.timestamp.desc()).first()
                     if last:
-                        age_min = (datetime.now(timezone.utc) - last.timestamp.replace(tzinfo=timezone.utc)).seconds // 60
+                        age_min = int((datetime.now(timezone.utc) - last.timestamp.replace(tzinfo=timezone.utc)).total_seconds() // 60)
                         if age_min > 15:
                             stale.append(f"{sym} ({age_min}m old)")
             finally:

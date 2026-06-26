@@ -144,6 +144,24 @@ class SignalFeature(Base):
     )
 
 
+class MlModelRegistry(Base):
+    """
+    Persists model registry in PostgreSQL so nightly retrain metadata survives Railway deploys.
+    The .joblib file is still stored on the filesystem, but this table tracks which version
+    is production and its AUC — so after a deploy the system knows what it last trained.
+    """
+    __tablename__ = "ml_model_registry"
+
+    id = Column(Integer, primary_key=True)
+    version = Column(String(30), unique=True, nullable=False)
+    filename = Column(String(100), nullable=False)          # basename of .joblib file
+    auc = Column(Float, nullable=False)
+    trained_at = Column(DateTime(timezone=True), nullable=False)
+    is_production = Column(Boolean, default=False, nullable=False)
+    metadata_json = Column(JSON)                            # walk_forward results, row counts, etc.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class UpstoxToken(Base):
     """Stores the daily Upstox OAuth token. Railway filesystem is ephemeral so we use DB."""
     __tablename__ = "upstox_token"
