@@ -137,6 +137,24 @@ def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_atr(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+    """
+    ATR (Average True Range) — measures market volatility.
+    atr: rolling average of true range in price points
+    atr_pct: ATR as a fraction of close price (comparable across symbols/price levels)
+    Low atr_pct = consolidating market unlikely to move enough to hit target.
+    """
+    prev_close = df["close"].shift(1)
+    tr = pd.concat([
+        df["high"] - df["low"],
+        (df["high"] - prev_close).abs(),
+        (df["low"] - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    df["atr"] = tr.rolling(window=period).mean()
+    df["atr_pct"] = df["atr"] / df["close"]
+    return df
+
+
 def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     Master function — runs all indicators on a DataFrame.
@@ -150,6 +168,7 @@ def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = add_bollinger_bands(df)
     df = add_volume_spike(df)
     df = add_trend_slope(df)
+    df = add_atr(df)
     df = add_candle_features(df)
     df = add_time_features(df)
     return df

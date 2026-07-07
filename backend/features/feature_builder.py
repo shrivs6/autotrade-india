@@ -90,6 +90,8 @@ def extract_latest_features(df: pd.DataFrame) -> dict | None:
         "session_morning": row.get("session_morning"),
         "session_midday": row.get("session_midday"),
         "session_afternoon": row.get("session_afternoon"),
+        # Volatility
+        "atr_pct": row.get("atr_pct"),
         # Price (not a model feature — used for order sizing and candle high/low monitoring)
         "close_price": row.get("close"),
         "high_price": row.get("high"),

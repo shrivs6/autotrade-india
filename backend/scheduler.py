@@ -147,6 +147,13 @@ def job_scan_and_trade():
         if skip_new_entries:
             logger.warning(f"[{now.strftime('%H:%M')}] Candle refresh failed for all symbols — skipping new entries to avoid stale-price trades")
 
+        # Block new entries for the first 15 minutes after market open.
+        # Opening auction creates gap-and-reverse candles that look like strong signals
+        # but have no follow-through. Indicators need a few candles to stabilise.
+        if now.hour == 9 and now.minute < 45:
+            skip_new_entries = True
+            logger.info(f"[{now.strftime('%H:%M')}] Opening 15-min window — monitoring only, no new entries until 9:45")
+
         # VIX halt — retry live fetch every scan until 12:30 PM if VIX is still missing.
         # Model is weakest after 12:30 PM so no point entering trades without context that late.
         from backend.features.market_context_scorer import get_today_context, save_morning_context
@@ -212,6 +219,17 @@ def job_scan_and_trade():
                         direction = None
                     elif abs(bias) <= 0.15 and confidence < 0.65:
                         logger.info(f"{symbol}: skipping {direction.upper()} — NEUTRAL bias, confidence {confidence:.2f} < 0.65")
+                        direction = None
+
+                if direction and not skip_new_entries:
+                    # ATR filter — skip entries when market is consolidating.
+                    # If 14-period ATR < 0.15% of price, a 1% target is very unlikely
+                    # to be reached before EOD. These trades just eat up capital and
+                    # close flat at square-off time.
+                    from backend.config import MIN_ATR_PCT
+                    atr_pct = features.get("atr_pct") or 0
+                    if atr_pct < MIN_ATR_PCT:
+                        logger.info(f"{symbol}: skipping {direction.upper()} — low volatility (ATR {atr_pct:.3%} < {MIN_ATR_PCT:.3%})")
                         direction = None
 
                 if direction and not skip_new_entries:

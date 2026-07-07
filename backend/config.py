@@ -21,7 +21,8 @@ INTRADAY_MARGIN_MULTIPLIER = 5   # 5x MIS margin (SEBI standard for intraday)
 MAX_CONCURRENT_POSITIONS = 3
 DAILY_LOSS_LIMIT = -50000        # halt trading if PnL drops below this (paper trading — sized for futures exposure ~₹8k/stop)
 STOP_LOSS_PCT = 0.005            # 0.5%
-TARGET_PCT = 0.0075              # 0.75%
+TARGET_PCT = 0.01                # 1.0%  (was 0.75% — widened to 1:2 R:R to give cushion above 40% win-rate breakeven)
+MIN_ATR_PCT = 0.0015             # Skip entries if 14-period ATR < 0.15% of price (market too quiet to hit target)
 
 # Market hours (IST, 24h)
 MARKET_OPEN = "09:15"
